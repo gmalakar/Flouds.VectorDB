@@ -1,0 +1,10 @@
+fastapi[standard]
+uvicorn
+hypercorn
+optimum[onnxruntime]
+transformers
+numpy
+onnxruntime
+pydantic
+typing-extensions
+pymilvus
