@@ -6,14 +6,38 @@
 
 import asyncio
 import logging
+import sys
+from contextlib import asynccontextmanager
 
-from app import app
-from app.routers import vector_store
-from app.setup import APP_SETTINGS
+from fastapi import FastAPI
+
+from app.app_init import APP_SETTINGS
+from app.milvus.milvus_helper import MilvusHelper
+from app.routers import user, vector_store
 
 logger = logging.getLogger("main")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if APP_SETTINGS.vectordb:
+        try:
+            MilvusHelper.initialize()
+            logger.info("Milvus connection initialized successfully.")
+        except Exception as e:
+            logger.error(f"Failed to initialize Milvus connection: {str(e)}")
+            sys.exit("Failed to initialize Milvus connection. Exiting application.")
+    else:
+        logger.warning(
+            "VectorDB configuration is not set. Skipping Milvus initialization."
+        )
+        sys.exit("VectorDB configuration is not set. Exiting application.")
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 app.include_router(vector_store.router)
+app.include_router(user.router)
 
 
 @app.get("/")
@@ -44,7 +68,6 @@ def run_server():
 
         asyncio.run(serve(app, config))
     else:
-        # Default to uvicorn if unknown type
         import uvicorn
 
         uvicorn.run(

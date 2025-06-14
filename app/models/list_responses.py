@@ -13,9 +13,11 @@ from app.models.base_response import BaseResponse
 # from app.models.milvus_db_info import MilvusDBInfo
 
 
-class DatabaseInfoResponse(BaseResponse):
+class ListResponse(BaseResponse):
     """
-    Response model for database information.
+    Response model for list information.
     """
 
-    results: dict = Field(..., description="The database information for the tenant.")
+    results: dict = Field(
+        ..., description="The dictionary containing the list of items."
+    )

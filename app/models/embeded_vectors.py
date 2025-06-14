@@ -4,6 +4,6 @@ from pydantic import BaseModel, Field
 
 
 class EmbeddedVectors(BaseModel):
-    content: str = Field(..., description="The text content.")
-    model_used: str = Field(..., description="The model used for embedding.")
-    vectors: List[float] = Field(..., description="The embedding vector values.")
+    chunk: str = Field(..., description="The text chunk.")
+    model: str = Field(..., description="The model used for embedding.")
+    vector: List[float] = Field(..., description="The embedding vector values.")
