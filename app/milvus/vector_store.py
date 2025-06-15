@@ -113,9 +113,7 @@ class VectorStore(BaseMilvus):
                 f"Setting collection for tenant '{self._tenant_code}' with user '{self._user_id}'"
             )
             client = self._get_tenant_client()
-            logger.debug(
-                f"Using tenant client for collection '{self._store_name}'"
-            )
+            logger.debug(f"Using tenant client for collection '{self._store_name}'")
             client.insert(
                 collection_name=self._store_name,
                 data=self.__convert_to_field_data(vector, meta=kwargs),

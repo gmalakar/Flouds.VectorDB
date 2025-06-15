@@ -83,7 +83,9 @@ def test_set_vector_store_success(set_vector_store_request):
         "app.services.vector_store_service.MilvusHelper.set_vector_store"
     ) as mock_set_vector_store:
         mock_set_vector_store.return_value = {"result": "ok"}
-        resp = VectorStoreService.set_vector_store(set_vector_store_request, token="user:pass")
+        resp = VectorStoreService.set_vector_store(
+            set_vector_store_request, token="user:pass"
+        )
         assert resp.success is True
         assert resp.results == {"result": "ok"}
         assert resp.for_tenant == "tenant1"
@@ -94,7 +96,9 @@ def test_set_vector_store_failure(set_vector_store_request):
         "app.services.vector_store_service.MilvusHelper.set_vector_store",
         side_effect=Exception("fail"),
     ):
-        resp = VectorStoreService.set_vector_store(set_vector_store_request, token="user:pass")
+        resp = VectorStoreService.set_vector_store(
+            set_vector_store_request, token="user:pass"
+        )
         assert resp.success is False
         assert "fail" in resp.message
         assert resp.for_tenant == "tenant1"
@@ -106,7 +110,9 @@ def test_insert_into_vector_store_success(insert_embedded_request):
         "app.services.vector_store_service.MilvusHelper.insert_embedded_data"
     ) as mock_insert:
         mock_insert.return_value = 1
-        resp = VectorStoreService.insert_into_vector_store(insert_embedded_request, token="user:pass")
+        resp = VectorStoreService.insert_into_vector_store(
+            insert_embedded_request, token="user:pass"
+        )
         assert resp.success is True
         assert "1 vectors inserted" in resp.message
         assert resp.for_tenant == "tenant1"
@@ -117,7 +123,9 @@ def test_insert_into_vector_store_failure(insert_embedded_request):
         "app.services.vector_store_service.MilvusHelper.insert_embedded_data",
         side_effect=Exception("fail"),
     ):
-        resp = VectorStoreService.insert_into_vector_store(insert_embedded_request, token="user:pass")
+        resp = VectorStoreService.insert_into_vector_store(
+            insert_embedded_request, token="user:pass"
+        )
         assert resp.success is False
         assert "fail" in resp.message
         assert resp.for_tenant == "tenant1"
@@ -168,7 +176,9 @@ def test_search_in_vector_store_success(search_request):
         "app.services.vector_store_service.MilvusHelper.search_embedded_data"
     ) as mock_search:
         mock_search.return_value = fake_results
-        resp = VectorStoreService.search_in_vector_store(search_request, token="user:pass")
+        resp = VectorStoreService.search_in_vector_store(
+            search_request, token="user:pass"
+        )
         mock_search.assert_called_once_with(request=search_request, token="user:pass")
         assert resp.success is True
         assert resp.data == fake_results
@@ -181,7 +191,9 @@ def test_search_in_vector_store_no_results(search_request):
         "app.services.vector_store_service.MilvusHelper.search_embedded_data"
     ) as mock_search:
         mock_search.return_value = []
-        resp = VectorStoreService.search_in_vector_store(search_request, token="user:pass")
+        resp = VectorStoreService.search_in_vector_store(
+            search_request, token="user:pass"
+        )
         assert resp.success is False
         assert resp.data == []
         assert resp.message == "No vectors found in the vector store."
@@ -193,7 +205,9 @@ def test_search_in_vector_store_failure(search_request):
         "app.services.vector_store_service.MilvusHelper.search_embedded_data",
         side_effect=Exception("fail"),
     ):
-        resp = VectorStoreService.search_in_vector_store(search_request, token="user:pass")
+        resp = VectorStoreService.search_in_vector_store(
+            search_request, token="user:pass"
+        )
         assert resp.success is False
         assert "fail" in resp.message
         assert resp.data == []

@@ -43,6 +43,8 @@ app.include_router(user.router)
 @app.get("/")
 def read_root(authorization: str = Header(None)):
     return {"authorization": authorization}
+
+
 # def root() -> dict:
 #     """Root endpoint for health check."""
 #     return {"message": "FloudsVectors.Py API is running"}

@@ -6,8 +6,7 @@
 
 import asyncio
 
-from fastapi import APIRouter
-from fastapi import Depends
+from fastapi import APIRouter, Depends
 
 from app.dependencies.auth import get_token
 from app.logger import get_logger
@@ -25,7 +24,9 @@ logger = get_logger("router")
 
 
 @router.post("/set_vector_store", tags=["vector_store"], response_model=ListResponse)
-async def set_vector_store(request: SetVectorStoreRequest, token: str = Depends(get_token)) -> ListResponse:
+async def set_vector_store(
+    request: SetVectorStoreRequest, token: str = Depends(get_token)
+) -> ListResponse:
     """
     Sets or retrieves a vector store for the given tenant.
 
@@ -35,7 +36,9 @@ async def set_vector_store(request: SetVectorStoreRequest, token: str = Depends(
     Returns:
         ListResponse: The response with vector store details.
     """
-    logger.debug(f"Vector store request set_vector_store for tenant: {request.tenant_code}")
+    logger.debug(
+        f"Vector store request set_vector_store for tenant: {request.tenant_code}"
+    )
     response: ListResponse = await asyncio.to_thread(
         VectorStoreService.set_vector_store,
         request,
@@ -53,7 +56,9 @@ async def set_vector_store(request: SetVectorStoreRequest, token: str = Depends(
 
 
 @router.post("/insert", tags=["vector_store"], response_model=BaseResponse)
-async def insert(request: InsertEmbeddedRequest, token: str = Depends(get_token)) -> BaseResponse:
+async def insert(
+    request: InsertEmbeddedRequest, token: str = Depends(get_token)
+) -> BaseResponse:
     """
     Inserts embedded vectors into the vector store for the given tenant.
 
@@ -82,8 +87,7 @@ async def insert(request: InsertEmbeddedRequest, token: str = Depends(get_token)
 
 @router.post("/search", tags=["vector_store"], response_model=SearchEmbeddedResponse)
 async def search(
-    request: SearchEmbeddedRequest,
-    token: str = Depends(get_token)
+    request: SearchEmbeddedRequest, token: str = Depends(get_token)
 ) -> SearchEmbeddedResponse:
     """
     Searches for embedded vectors in the vector store for the given tenant.

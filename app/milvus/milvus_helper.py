@@ -106,7 +106,9 @@ class MilvusHelper(BaseMilvus):
             logger.error(f"User '{client_id}' is not a super user.")
             raise PermissionError("User is not a super user.")
 
-        return MilvusHelper._create_user_for_tenant(tenant_code=tenant_code, token=token, **kwargs)
+        return MilvusHelper._create_user_for_tenant(
+            tenant_code=tenant_code, token=token, **kwargs
+        )
 
     @staticmethod
     def _split_token(token: str) -> Tuple[str, str]:

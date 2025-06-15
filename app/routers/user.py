@@ -6,8 +6,7 @@
 
 import asyncio
 
-from fastapi import APIRouter
-from fastapi import Depends
+from fastapi import APIRouter, Depends
 
 from app.dependencies.auth import get_token
 from app.logger import get_logger
@@ -21,7 +20,9 @@ logger = get_logger("router")
 
 
 @router.post("/set", tags=["vector_store_users"], response_model=ListResponse)
-async def set_user(request: BaseRequest, token: str = Depends(get_token)) -> ListResponse:
+async def set_user(
+    request: BaseRequest, token: str = Depends(get_token)
+) -> ListResponse:
     """
     Sets a user in the vector store for the given tenant.
 
