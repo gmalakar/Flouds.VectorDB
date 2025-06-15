@@ -26,12 +26,13 @@ class VectorStoreService:
     """
 
     @classmethod
-    def set_user(cls, request: BaseRequest, **kwargs: Any) -> ListResponse:
+    def set_user(cls, request: BaseRequest, token: str, **kwargs: Any) -> ListResponse:
         """
         Sets a user in the vector store for the given tenant.
 
         Args:
             request (BaseRequest): The request object containing tenant and token info.
+            token (str): The token for authentication.
             **kwargs: Any extra keyword arguments to pass to MilvusHelper.set_user.
 
         Returns:
@@ -48,7 +49,7 @@ class VectorStoreService:
         try:
             logger.debug(f"User set request: {request.tenant_code}, kwargs: {kwargs}")
             response.results = MilvusHelper.set_user(
-                tenant_code=request.tenant_code, **kwargs
+                tenant_code=request.tenant_code, token=token, **kwargs
             )
             response.message = response.results.get("message", "User set successfully.")
         except Exception as e:
@@ -63,7 +64,7 @@ class VectorStoreService:
 
     @classmethod
     def set_vector_store(
-        cls, requests: SetVectorStoreRequest, **kwargs: Any
+        cls, requests: SetVectorStoreRequest, token: str, **kwargs: Any
     ) -> ListResponse:
         """
         Sets or retrieves a vector store for the given tenant.
@@ -87,7 +88,7 @@ class VectorStoreService:
             logger.debug(f"vector store request: {requests.tenant_code}")
             response.results = MilvusHelper.set_vector_store(
                 tenant_code=requests.tenant_code,
-                token=requests.token,
+                token=token,
                 vector_dimension=requests.vector_dimension,
                 **kwargs,
             )
@@ -103,7 +104,7 @@ class VectorStoreService:
 
     @classmethod
     def insert_into_vector_store(
-        cls, requests: InsertEmbeddedRequest, **kwargs: Any
+        cls, requests: InsertEmbeddedRequest, token: str, **kwargs: Any
     ) -> BaseResponse:
         """
         Inserts embedded vectors into the vector store for the given tenant.
@@ -126,6 +127,7 @@ class VectorStoreService:
             logger.debug(f"vector store request: {requests.tenant_code}")
             num_inserted: int = MilvusHelper.insert_embedded_data(
                 request=requests,
+                token=token,
                 **kwargs,
             )
             response.message = (
@@ -143,7 +145,7 @@ class VectorStoreService:
 
     @classmethod
     def search_in_vector_store(
-        cls, requests: SearchEmbeddedRequest, **kwargs: Any
+        cls, requests: SearchEmbeddedRequest, token: str, **kwargs: Any
     ) -> SearchEmbeddedResponse:
         """
         Searches for embedded vectors in the vector store for the given tenant.
@@ -174,6 +176,7 @@ class VectorStoreService:
             logger.debug(f"vector store request: {requests.tenant_code}")
             search_results = MilvusHelper.search_embedded_data(
                 request=requests,
+                token=token,
                 **kwargs,
             )
             response.data = search_results

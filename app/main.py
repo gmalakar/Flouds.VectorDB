@@ -9,7 +9,7 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header
 
 from app.app_init import APP_SETTINGS
 from app.milvus.milvus_helper import MilvusHelper
@@ -41,9 +41,11 @@ app.include_router(user.router)
 
 
 @app.get("/")
-def root() -> dict:
-    """Root endpoint for health check."""
-    return {"message": "FloudsVectors.Py API is running"}
+def read_root(authorization: str = Header(None)):
+    return {"authorization": authorization}
+# def root() -> dict:
+#     """Root endpoint for health check."""
+#     return {"message": "FloudsVectors.Py API is running"}
 
 
 def run_server():

@@ -7,7 +7,9 @@
 import asyncio
 
 from fastapi import APIRouter
+from fastapi import Depends
 
+from app.dependencies.auth import get_token
 from app.logger import get_logger
 from app.models.base_response import BaseResponse
 from app.models.insert_request import InsertEmbeddedRequest
@@ -23,7 +25,7 @@ logger = get_logger("router")
 
 
 @router.post("/set_vector_store", tags=["vector_store"], response_model=ListResponse)
-async def set_vector_store(request: SetVectorStoreRequest) -> ListResponse:
+async def set_vector_store(request: SetVectorStoreRequest, token: str = Depends(get_token)) -> ListResponse:
     """
     Sets or retrieves a vector store for the given tenant.
 
@@ -37,6 +39,7 @@ async def set_vector_store(request: SetVectorStoreRequest) -> ListResponse:
     response: ListResponse = await asyncio.to_thread(
         VectorStoreService.set_vector_store,
         request,
+        token=token,
         **CommonUtils.parse_extra_fields(request, SetVectorStoreRequest),
     )
     logger.debug(f"Vector store response: {response.for_tenant} - {response.success}")
@@ -50,7 +53,7 @@ async def set_vector_store(request: SetVectorStoreRequest) -> ListResponse:
 
 
 @router.post("/insert", tags=["vector_store"], response_model=BaseResponse)
-async def insert(request: InsertEmbeddedRequest) -> BaseResponse:
+async def insert(request: InsertEmbeddedRequest, token: str = Depends(get_token)) -> BaseResponse:
     """
     Inserts embedded vectors into the vector store for the given tenant.
 
@@ -64,6 +67,7 @@ async def insert(request: InsertEmbeddedRequest) -> BaseResponse:
     response: BaseResponse = await asyncio.to_thread(
         VectorStoreService.insert_into_vector_store,
         request,
+        token=token,
         **CommonUtils.parse_extra_fields(request, InsertEmbeddedRequest),
     )
     logger.debug(f"Vector store response: {response.for_tenant} - {response.success}")
@@ -77,7 +81,10 @@ async def insert(request: InsertEmbeddedRequest) -> BaseResponse:
 
 
 @router.post("/search", tags=["vector_store"], response_model=SearchEmbeddedResponse)
-async def search(request: SearchEmbeddedRequest) -> SearchEmbeddedResponse:
+async def search(
+    request: SearchEmbeddedRequest,
+    token: str = Depends(get_token)
+) -> SearchEmbeddedResponse:
     """
     Searches for embedded vectors in the vector store for the given tenant.
 
@@ -91,6 +98,7 @@ async def search(request: SearchEmbeddedRequest) -> SearchEmbeddedResponse:
     response: SearchEmbeddedResponse = await asyncio.to_thread(
         VectorStoreService.search_in_vector_store,
         request,
+        token=token,
         **CommonUtils.parse_extra_fields(request, SearchEmbeddedRequest),
     )
     logger.debug(f"Vector store response: {response.for_tenant} - {response.success}")

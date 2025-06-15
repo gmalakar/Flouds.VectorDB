@@ -60,6 +60,8 @@ class VectorStore(BaseMilvus):
             self._tenant_code
         )
         self._tenant_client: Optional[MilvusClient] = None
+        self._has_collection: Optional[Collection] = False
+        self._has_index: Optional[str] = False
         self._lock: Lock = Lock()
 
     def _get_tenant_client(self) -> MilvusClient:
@@ -107,8 +109,13 @@ class VectorStore(BaseMilvus):
             )
             if not self.__set_collection():
                 raise Exception(f"Failed to set collection for {self._store_name}")
-
+            logger.debug(
+                f"Setting collection for tenant '{self._tenant_code}' with user '{self._user_id}'"
+            )
             client = self._get_tenant_client()
+            logger.debug(
+                f"Using tenant client for collection '{self._store_name}'"
+            )
             client.insert(
                 collection_name=self._store_name,
                 data=self.__convert_to_field_data(vector, meta=kwargs),
@@ -225,10 +232,13 @@ class VectorStore(BaseMilvus):
             if client.has_collection(self._store_name):
                 logger.info(f"Vector store '{self._store_name}' already exists.")
                 # Always ensure index exists before loading
-                BaseMilvus._create_vector_store_index_if_not_exists(
-                    self._store_name, self._tenant_code
-                )
+                if not self._has_index:
+                    BaseMilvus._create_vector_store_index_if_not_exists(
+                        self._store_name, self._tenant_code
+                    )
                 client.load_collection(self._store_name)
+                logger.info(f"Vector store '{self._store_name}' loaded.")
+                self._has_collection = True
             else:
                 logger.info(
                     f"Vector store '{self._store_name}' does not exist. so create it."
@@ -238,6 +248,7 @@ class VectorStore(BaseMilvus):
                     user_id=self._user_id,
                     vector_dimension=self._vector_dimension,
                 )
+            return True
         except Exception as ex:
             logger.error(f"Error in _set_collection for '{self._store_name}': {ex}")
             raise Exception(f"Error in _set_collection for '{self._store_name}': {ex}")

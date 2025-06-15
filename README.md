@@ -158,9 +158,9 @@ Below are some example requests:
 ```sh
 curl -X POST http://localhost:19680/vector_store/set_vector_store \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer admin:admin_password" \
   -d '{
     "tenant_code": "mytenant",
-    "token": "admin:admin_password",
     "vector_dimension": 256
   }'
 ```
@@ -170,9 +170,9 @@ curl -X POST http://localhost:19680/vector_store/set_vector_store \
 ```sh
 curl -X POST http://localhost:19680/vector_store/insert \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer user:password" \
   -d '{
     "tenant_code": "mytenant",
-    "token": "user:password",
     "data": [
       {
         "chunk": "This is a test.",
@@ -188,9 +188,9 @@ curl -X POST http://localhost:19680/vector_store/insert \
 ```sh
 curl -X POST http://localhost:19680/vector_store/search \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer user:password" \
   -d '{
     "tenant_code": "mytenant",
-    "token": "user:password",
     "model": "all-MiniLM-L6-v2",
     "limit": 10,
     "offset": 0,
@@ -207,9 +207,9 @@ curl -X POST http://localhost:19680/vector_store/search \
 ```sh
 curl -X POST http://localhost:19680/vector_store_users/set \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer admin:admin_password" \
   -d '{
-    "tenant_code": "mytenant",
-    "token": "admin:admin_password"
+    "tenant_code": "mytenant"
   }'
 ```
 
@@ -217,7 +217,7 @@ curl -X POST http://localhost:19680/vector_store_users/set \
 
 ## Useful Points
 
-- All endpoints require a valid `tenant_code` and `token` (format: `user:password`).
+- All endpoints require a valid `tenant_code` in the request body and a `token` in the `Authorization` header (format: `user:password`).
 - The `/vector_store/set_vector_store` endpoint must be called by a super user (admin/root).
 - You can use environment variables or config files to manage credentials and server settings.
 - Logs are written to the `logs/` directory and to the console.

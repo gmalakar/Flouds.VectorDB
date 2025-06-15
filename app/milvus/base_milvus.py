@@ -569,30 +569,10 @@ class BaseMilvus:
         """
         index_name = "vector_index"
         try:
-            db_name = BaseMilvus._get_db_name_by_tenant_code(tenant_code)
-            admin_client = BaseMilvus.__get_internal_admin_client()
-            db_list = admin_client.list_databases()
-            if db_name not in db_list:
-                logger.error(
-                    f"Database '{db_name}' does not exist for tenant '{tenant_code}'."
-                )
-                raise Exception(
-                    f"Database '{db_name}' does not exist for tenant '{tenant_code}'."
-                )
-
             with BaseMilvus.__db_switch_lock:
                 db_admin_client = BaseMilvus._get_or_create_tenant_connection(
                     tenant_code
                 )
-                collections = db_admin_client.list_collections()
-                if collection_name not in collections:
-                    logger.error(
-                        f"Collection '{collection_name}' does not exist in database '{db_name}'."
-                    )
-                    raise Exception(
-                        f"Collection '{collection_name}' does not exist in database '{db_name}'."
-                    )
-
                 index_params = {
                     "field_name": "vector",
                     "index_type": "IVF_FLAT",
@@ -625,6 +605,7 @@ class BaseMilvus:
                         f"Index '{index_name}' created on 'vector' in '{collection_name}'."
                     )
                     created = True
+                    self._has_index = True
                 else:
                     logger.debug(
                         f"Index '{index_name}' already exists on '{collection_name}'."
