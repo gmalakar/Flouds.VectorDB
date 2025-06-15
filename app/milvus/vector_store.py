@@ -1,3 +1,9 @@
+# =============================================================================
+# File: vector_store.py
+# Date: 2025-06-14
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 import json
 from threading import Lock
 from typing import Any, List, Optional
@@ -7,7 +13,9 @@ from pymilvus import Collection, MilvusClient  # Adjust if needed
 from app.app_init import APP_SETTINGS
 from app.logger import get_logger
 from app.milvus.base_milvus import BaseMilvus
+from app.models.embeded_meta import EmbeddedMeta
 from app.models.embeded_vectors import EmbeddedVectors
+from app.models.search_request import SearchEmbeddedRequest
 
 logger = get_logger("Vector Store")
 
@@ -81,84 +89,128 @@ class VectorStore(BaseMilvus):
         ]
 
     def insert_data(self, vector: List[EmbeddedVectors], **kwargs: Any) -> None:
+        """
+        Inserts embedded vectors into the Milvus collection for this tenant.
+
+        Args:
+            vector (List[EmbeddedVectors]): The vectors to insert.
+            **kwargs: Extra metadata to store as JSON in the 'meta' field.
+
+        Raises:
+            Exception: If insertion fails.
+        """
         try:
             for i, e in enumerate(vector):
                 logger.debug(f"Item {i}: vector length = {len(e.vector)}")
-            logger.debug(
+            logger.info(
                 f"Inserting {len(vector)} vectors into Milvus collection '{self._store_name}'"
             )
-            if self.__set_collection() is False:
+            if not self.__set_collection():
                 raise Exception(f"Failed to set collection for {self._store_name}")
 
             client = self._get_tenant_client()
-            logger.debug(
-                f"Inserting {len(vector)} vectors into Milvus collection '{self._store_name}'"
-            )
-            # logger.debug(f"Insert data: {self._convert_to_field_data(vector)}")
             client.insert(
                 collection_name=self._store_name,
                 data=self.__convert_to_field_data(vector, meta=kwargs),
                 partition_name=kwargs.get("partition_name", ""),
             )
-            logger.debug(
+            logger.info(
                 f"Successfully inserted {len(vector)} vectors into Milvus collection '{self._store_name}'"
             )
             client.flush(self._store_name)
         except Exception as ex:
-            logger.error(f"Error inserting data into Milvus collection: {ex}")
+            logger.exception(f"Error inserting data into Milvus collection: {ex}")
             raise Exception("Error inserting data into Milvus collection") from ex
 
-    def search_embedded_data(
-        self, text_to_search: str, vector: List[float], parameters: dict
-    ) -> dict:
-        try:
-            results = self.search_store(vector, parameters)
-            if results:
-                return {
-                    "status": "OK",
-                    "results": results,
-                    "message": f"Found matching chunk for text '{text_to_search}'",
-                }
-            else:
-                return {
-                    "status": "no chunks found",
-                    "message": f"Could not find any matching chunk for text '{text_to_search}'",
-                }
-        except Exception as ex:
-            logger.error(f"Exception during search: {ex}")
-            return {"status": "Exception", "message": str(ex)}
+    # def search_embedded_data(
+    #     self, text_to_search: str, vector: List[float], parameters: dict
+    # ) -> dict:
+    #     try:
+    #         results = self.search_store(vector, parameters)
+    #         if results:
+    #             return {
+    #                 "status": "OK",
+    #                 "results": results,
+    #                 "message": f"Found matching chunk for text '{text_to_search}'",
+    #             }
+    #         else:
+    #             return {
+    #                 "status": "no chunks found",
+    #                 "message": f"Could not find any matching chunk for text '{text_to_search}'",
+    #             }
+    #     except Exception as ex:
+    #         logger.error(f"Exception during search: {ex}")
+    #         return {"status": "Exception", "message": str(ex)}
 
-    def search_store(self, vector: List[float], parameters: dict) -> List[Any]:
+    def search_store(
+        self, request: SearchEmbeddedRequest, **kwargs
+    ) -> List[EmbeddedMeta]:
         if self.__set_collection() is False:
             raise Exception(f"Failed to set collection for {self._store_name}")
-        results: List[Any] = []
+        results: List[EmbeddedMeta] = []
         client = self._get_tenant_client()
 
-        model = parameters.get("model", "").lower()
+        model = request.model.lower()
         expr = f'model == "{model}"' if model else ""
-        # HINT: Ensure search_params matches your collection schema and Milvus requirements
+
+        params = {}
+        for key in ["nprobe", "ef", "radius", "range_filter"]:
+            value = kwargs.get(key, getattr(request, key, None))
+            if value is not None:
+                params[key] = value
+
         search_params = {
-            "metric_type": parameters.get("metric_type", "COSINE"),
-            "params": {"nprobe": parameters.get("nprobe", 10)},
-            "limit": parameters.get("limit", 10),
-            "output_fields": ["chunk"],
-            "expr": expr,
+            "metric_type": kwargs.get(
+                "metric_type", getattr(request, "metric_type", None)
+            ),
+            "params": params,
+            "output_fields": BaseMilvus.get_chunk_meta_output_fields(),
         }
+        # Only add optional top-level keys if not None
+        for key in [
+            "limit",
+            "offset",
+            "expr",
+            "partition_names",
+            "score_threshold",
+            "timeout",
+            "round_decimal",
+            "_async",
+            "_callback",
+            "consistency_level",
+            "guarantee_timestamp",
+            "graceful_time",
+            "travel_timestamp",
+        ]:
+            value = kwargs.get(key, getattr(request, key, None))
+            if value is not None:
+                search_params[key] = value
 
         result = client.search(
             collection_name=self._store_name,
-            data=[vector],
+            data=[request.vector],
             anns_field="vector",
             search_params=search_params,
-            limit=search_params["limit"],
+            limit=search_params.get("limit"),
             output_fields=search_params["output_fields"],
         )
+
         # Parse results as needed
         for hits in result:
             for hit in hits:
                 chunk = hit.entity.get("chunk")
                 if chunk:
-                    results.append(json.loads(chunk))
+                    meta = hit.entity.get("meta", "{}")
+                    if isinstance(meta, str):
+                        meta = json.loads(meta)
+                    embeded_meta = EmbeddedMeta(
+                        content=chunk,
+                        meta=meta,
+                    )
+                    results.append(embeded_meta)
+        logger.debug(
+            f"Retrieved {len(results)} results from vector store '{self._store_name}'"
+        )
         return results
 
     def __set_collection(self) -> bool:
@@ -186,40 +238,6 @@ class VectorStore(BaseMilvus):
                     user_id=self._user_id,
                     vector_dimension=self._vector_dimension,
                 )
-                # try:
-                #     with self._lock:
-                #         # make sure to use the admin client to create the collection
-                #         logger.info(
-                #             f"Creating vector store '{self._store_name}' for tenant '{self._tenant_code}'"
-                #         )
-                #         self._get_store_admin_client().create_collection(
-                #             collection_name=self._store_name,
-                #             schema=BaseMilvus._get_vector_store_schema(
-                #                 self._store_name
-                #             ),
-                #         )
-                #         BaseMilvus._create_vector_store_index_if_not_exists(
-                #             self._store_name
-                #         )
-                #         tenant_role_name = (
-                #             BaseMilvus._get_tenant_role_name_by_tenant_code(
-                #                 self._tenant_code
-                #             )
-                #         )
-                #         BaseMilvus._grant_tenant_privileges_to_collection_if_missing(
-                #             tenant_role_name, self._store_name
-                #         )
-                #         logger.info(
-                #             f"Vector store '{self._store_name}' created successfully."
-                #         )
-                #         return True
-                # except Exception as ex:
-                #     logger.error(
-                #         f"Failed to create collection '{self._store_name}': {ex}"
-                #     )
-                #     raise Exception(
-                #         f"Failed to create collection '{self._store_name}': {ex}"
-                #     )
         except Exception as ex:
             logger.error(f"Error in _set_collection for '{self._store_name}': {ex}")
             raise Exception(f"Error in _set_collection for '{self._store_name}': {ex}")

@@ -9,10 +9,11 @@ from pydantic import BaseModel, Field
 
 class BaseRequest(BaseModel):
     """
-    Request model for text summarization.
+    Request model for milvus database operations.
+    This model serves as a base for all request models, providing common fields
     """
 
-    for_tenant: str = Field(
+    tenant_code: str = Field(
         ...,
         description="The tenant for which the request is made. This field is required.",
     )

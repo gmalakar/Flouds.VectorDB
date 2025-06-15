@@ -13,7 +13,7 @@ from fastapi import FastAPI
 
 from app.app_init import APP_SETTINGS
 from app.milvus.milvus_helper import MilvusHelper
-from app.routers import user, vector_store
+from app.routers import user, vector
 
 logger = logging.getLogger("main")
 
@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-app.include_router(vector_store.router)
+app.include_router(vector.router)
 app.include_router(user.router)
 
 

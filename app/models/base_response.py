@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 class BaseResponse(BaseModel):
     """
-    Base response model for API responses.
+    Base response model for API responses from milvus.
     """
 
     success: bool = Field(

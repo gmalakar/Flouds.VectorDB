@@ -1,3 +1,9 @@
+# =============================================================================
+# File: base_milvus.py
+# Date: 2025-06-14
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 import base64
 import os
 import random
@@ -26,14 +32,17 @@ logger = get_logger("BaseMilvus")
 
 
 class BaseMilvus:
+    """
+    Base class for Milvus operations, including connection management,
+    user/role/collection/index setup, and utility helpers.
+    """
+
     __tenant_connections: ConcurrentDict = ConcurrentDict("_tenant_connections")
-    __COLLECTION_SCHEMA_NAME = (
-        "vector_store_schema"  # HINT: Now 'private' by convention
-    )
-    __DB_NAME_SUFFIX = "_vectorstore"
-    __TENANT_NAME_SUFFIX = "_tenant_role"
-    __CLIENT_ID_LENGTH: int = 32  # HINT: Length of the client_id
-    __CLIENT_SECRET_LENGTH: int = 36  # HINT: Length of the client_secret
+    __COLLECTION_SCHEMA_NAME: str = "vector_store_schema"
+    __DB_NAME_SUFFIX: str = "_vectorstore"
+    __TENANT_NAME_SUFFIX: str = "_tenant_role"
+    __CLIENT_ID_LENGTH: int = 32
+    __CLIENT_SECRET_LENGTH: int = 36
     __TENANT_ROLE_PRIVILEGES: List[str] = [
         "CreateIndex",
         "Search",
@@ -44,7 +53,7 @@ class BaseMilvus:
         "Flush",
         "Compaction",
     ]
-    __init_lock: Lock = Lock()  # HINT: Class-level lock for shared access
+    __init_lock: Lock = Lock()
     __initialized: bool = False
     __milvus_endpoint: str = "localhost"
     __milvus_port: int = 19530
@@ -52,11 +61,14 @@ class BaseMilvus:
     __milvus_admin_password: str = "none"
     __minvus_admin_client: Optional[MilvusClient] = None
     __db_switch_lock: Lock = Lock()
-    __user_create_lock: Lock = Lock()  # Add this line at the class level
+    __user_create_lock: Lock = Lock()
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """
+        Initializes the BaseMilvus instance and ensures global initialization.
+        """
         logger.debug("Initializing BaseMilvus...")
-        BaseMilvus.initialize()  # You can also use self.__initialize()
+        BaseMilvus.initialize()
         self._lock: Lock = Lock()
 
     @classmethod
@@ -165,6 +177,10 @@ class BaseMilvus:
 
     @staticmethod
     def _set_admin_role_if_not_exists() -> bool:
+        """
+        Ensures the admin role exists and has all necessary privileges.
+        Returns True if created, False if already existed.
+        """
         try:
             new = BaseMilvus._create_role_if_not_exists(
                 APP_SETTINGS.vectordb.admin_role_name
@@ -206,6 +222,7 @@ class BaseMilvus:
     def _create_role_if_not_exists(role_name: str) -> bool:
         """
         Checks if the tenant role exists, creates it if not.
+        Returns True if created, False if already existed.
         """
         client = BaseMilvus.__get_internal_admin_client()
         try:
@@ -232,6 +249,9 @@ class BaseMilvus:
 
     @classmethod
     def __get_internal_admin_client(cls) -> MilvusClient:
+        """
+        Returns the internal admin MilvusClient, initializing if necessary.
+        """
         if (
             cls.__minvus_admin_client is None
         ):  # HINT: Check if the client is already initialized
@@ -246,18 +266,30 @@ class BaseMilvus:
 
     @classmethod
     def _get_collection_schema_name(cls) -> str:
+        """
+        Returns the collection schema name.
+        """
         return cls.__COLLECTION_SCHEMA_NAME
 
     @staticmethod
     def _get_tenant_role_name_by_tenant_code(tenant_code: str) -> str:
+        """
+        Returns the role name for a given tenant code.
+        """
         return f"{tenant_code.lower()}{BaseMilvus.__TENANT_NAME_SUFFIX}"
 
     @staticmethod
     def _get_db_name_by_tenant_code(tenant_code: str) -> str:
+        """
+        Returns the database name for a given tenant code.
+        """
         return f"{tenant_code.lower()}{BaseMilvus.__DB_NAME_SUFFIX}"
 
     @staticmethod
     def _get_vector_store_name_by_tenant_code(tenant_code: str) -> str:
+        """
+        Returns the vector store (collection) name for a given tenant code.
+        """
         return (
             f"{BaseMilvus.__COLLECTION_SCHEMA_NAME}_for_{tenant_code.lower()}".lower()
         )
@@ -285,6 +317,9 @@ class BaseMilvus:
 
     @staticmethod
     def __valid_client_id(client_id: str, tenant_code: str) -> bool:
+        """
+        Checks if the client_id is valid for the given tenant.
+        """
         tenant_code = tenant_code.lower()
         prefix = f"{tenant_code}_"
         return (
@@ -295,6 +330,9 @@ class BaseMilvus:
 
     @staticmethod
     def __valid_client_secret(client_secret: str) -> bool:
+        """
+        Checks if the client_secret is valid (urlsafe base64 and correct length).
+        """
         size = BaseMilvus.__CLIENT_SECRET_LENGTH
         # Generate a new urlsafe key to get the expected length
         expected_length = len(
@@ -312,6 +350,9 @@ class BaseMilvus:
 
     @staticmethod
     def __generate_secret_key(current_secret_key: str) -> str:
+        """
+        Generates a new urlsafe secret key if the current one is invalid.
+        """
         size = BaseMilvus.__CLIENT_SECRET_LENGTH
         # Generate a new urlsafe key to get the expected length
         expected_length = len(
@@ -330,7 +371,11 @@ class BaseMilvus:
         return current_secret_key
 
     @staticmethod
-    def _validate_token(token):
+    def _validate_token(token: str) -> bool:
+        """
+        Validates a Milvus token by attempting a connection.
+        Returns True if valid, False otherwise.
+        """
         logger.debug(f"Validating token: {token}")
         try:
             alias = str(uuid.uuid4())  # Generate a unique alias
@@ -345,7 +390,10 @@ class BaseMilvus:
             return False
 
     @staticmethod
-    def _get_current_user_of_a_tenant(tenant_code: str) -> str:
+    def _get_current_user_of_a_tenant(tenant_code: str) -> Optional[str]:
+        """
+        Returns the current user for a tenant, or None if not found.
+        """
         current_user = None
         admin_client = BaseMilvus.__get_internal_admin_client()
         existing_users = admin_client.list_users()
@@ -360,9 +408,9 @@ class BaseMilvus:
         return current_user
 
     @staticmethod
-    def _create_user_for_tenant(tenant_code: str, **kwargs) -> dict:
+    def _create_user_for_tenant(tenant_code: str, **kwargs: Any) -> dict:
         """
-        Creates a user if it does not exist. Returns the password.
+        Creates a user if it does not exist. Returns a summary dict.
         Thread-safe.
         """
         summary = {
@@ -386,8 +434,8 @@ class BaseMilvus:
             with BaseMilvus.__user_create_lock:
                 try:
                     # HINT: Ensure client_id and secret_key are provided
-                    client_id = BaseMilvus.__generate_client_id(client_id, tenant_code)
-                    secret_key = BaseMilvus.__generate_secret_key(secret_key)
+                    client_id = BaseMilvus.__generate_client_id("none", tenant_code)
+                    secret_key = BaseMilvus.__generate_secret_key("none")
                     admin_client.create_user(user_name=client_id, password=secret_key)
                     summary["existing_user"] = False
                     summary["client_secret"] = secret_key
@@ -414,7 +462,17 @@ class BaseMilvus:
         )
 
     @staticmethod
+    def get_chunk_meta_output_fields() -> list:
+        """
+        Returns a list specifying output fields for chunk and meta.
+        """
+        return ["chunk", "meta"]
+
+    @staticmethod
     def _get_vector_store_schema(name: str, dimension: int = 256) -> CollectionSchema:
+        """
+        Returns the collection schema for a vector store.
+        """
         fields = [
             FieldSchema(
                 name="id",
@@ -461,7 +519,7 @@ class BaseMilvus:
         index_params: dict,
         index_name: str,
         milvus_client: Optional[MilvusClient] = None,
-    ):
+    ) -> None:
         """
         Creates an index on a collection field only if it doesn't already exist.
         """
@@ -585,7 +643,7 @@ class BaseMilvus:
 
     @staticmethod
     def _grant_tenant_privileges_to_collection_if_not_exists(
-        tenant_code: str, object_name: str, role_name: str = None
+        tenant_code: str, object_name: str, role_name: Optional[str] = None
     ) -> bool:
         """
         Grants privileges on a Milvus collection to a role for a specific tenant's database.
@@ -712,7 +770,10 @@ class BaseMilvus:
             )
 
     @staticmethod
-    def _is_super_user(user_id) -> bool:
+    def _is_super_user(user_id: str) -> bool:
+        """
+        Checks if the given user_id is a super user (admin/root or has admin role).
+        """
         try:
             if not user_id and user_id.strip() == "":
                 logger.error("User ID is empty or None.")
@@ -742,7 +803,7 @@ class BaseMilvus:
     @staticmethod
     def _setup_tenant_vector_store(
         tenant_code: str, vector_dimension: int = 256, **kwargs: Any
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Ensures the DB, collection, index, role, and privileges exist for a tenant.
         Creates the DB if it does not exist.
@@ -755,15 +816,14 @@ class BaseMilvus:
             "role_created": False,
             "privileges_granted": False,
             "role_assigned": False,
-            "client_id": "None",  # HINT: This should be set to the actual client_id if needed
-            "client_secret": None,  # HINT: This should be set to the actual secret key if needed
+            "client_id": None,
+            "client_secret": None,
             "new_client_id": False,
             "rejected_client_id": False,
             "tenant_code": tenant_code,
             "message": "Tenant vector store setup completed successfully.",
         }
         try:
-
             db_name = BaseMilvus._get_db_name_by_tenant_code(tenant_code)
             collection_name = BaseMilvus._get_vector_store_name_by_tenant_code(
                 tenant_code
@@ -780,21 +840,21 @@ class BaseMilvus:
                     f"Database '{db_name}' already exists for tenant '{tenant_code}'."
                 )
 
+            # User creation logic (extract to helper if desired)
             current_user = BaseMilvus._get_current_user_of_a_tenant(tenant_code)
             replace_current_client_id = kwargs.get("replace_current_client_id", False)
             create_another_client_id = kwargs.get("create_another_client_id", False)
+            logger.debug(
+                f"Current user for tenant '{tenant_code}': {current_user}, replace_current_client_id: {replace_current_client_id}, create_another_client_id: {create_another_client_id}"
+            )
             if (
                 current_user is None
                 or replace_current_client_id
                 or create_another_client_id
-            ):  # create user if replace is True or no existng user
-                if current_user is not None and replace_current_client_id:
+            ):
+                if current_user and replace_current_client_id:
                     admin_client.delete_user(user_name=current_user)
-                # fix this client_id, client_id should be generated based on tenant_code
-                # invalid client_id will return a new client_id to use
                 client_id = BaseMilvus.__generate_client_id("none", tenant_code)
-                # HINT: Ensure client_id and secret_key are provided
-                # generate client_id and secret_key
                 secret_key = BaseMilvus.__generate_secret_key("none")
                 admin_client.create_user(user_name=client_id, password=secret_key)
                 summary["client_id"] = client_id
@@ -802,13 +862,14 @@ class BaseMilvus:
                 summary["new_client_id"] = True
                 logger.debug(f"User '{client_id}' created successfully!")
             else:
-                logger.debug(f"User '{client_id}' already exists.")
+                summary["client_id"] = current_user
+                logger.debug(f"User '{current_user}' already exists.")
+            client_id = current_user
 
             with BaseMilvus.__db_switch_lock:
                 db_admin_client = BaseMilvus._get_or_create_tenant_connection(
                     tenant_code
                 )
-
                 # 1. Collection
                 collections = db_admin_client.list_collections()
                 if collection_name not in collections:
@@ -901,7 +962,7 @@ class BaseMilvus:
             return summary
 
         except Exception as ex:
-            logger.error(
+            logger.exception(
                 f"Failed to setup vector store for tenant '{tenant_code}': {ex}"
             )
             raise Exception(
