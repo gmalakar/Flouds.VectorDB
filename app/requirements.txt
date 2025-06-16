@@ -5,6 +5,3 @@ numpy
 pydantic
 typing-extensions
 pymilvus
-python-dotenv
-loguru
-httpx

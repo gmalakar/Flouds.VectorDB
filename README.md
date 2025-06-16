@@ -60,7 +60,6 @@ You can set server type, host, port, logging, and Milvus options.
     "workers": 4
   },
   "vectordb": {
-    "protocol": "http",
     "endpoint": "http://localhost",
     "port": 19530,
     "username": "root",
@@ -124,6 +123,8 @@ You can override any setting using environment variables (see below).
 - `FLOUDS_API_ENV` — Set to `Development`, `Production`, etc. to load environment-specific config.
 - `VECTORDB_USERNAME` — Milvus admin username (overrides config).
 - `VECTORDB_PASSWORD` — Milvus admin password (overrides config).
+- `VECTORDB_ENDPOINT` — Milvus endpoint/host (overrides config).
+- `VECTORDB_PORT` — Milvus port (overrides config).
 - `FLOUDS_PORT`, `FLOUDS_HOST`, `FLOUDS_SERVER_TYPE` — Override server settings.
 
 ---
@@ -262,11 +263,20 @@ docker run -p 19680:19680 \
   -e FLOUDS_API_ENV=Production \
   -e FLOUDS_DEBUG_MODE=0 \
   -e FLOUDS_PORT=19680 \
+  -e VECTORDB_USERNAME=admin \
+  -e VECTORDB_PASSWORD=yourpassword \
+  -e VECTORDB_ENDPOINT=localhost \
+  -e VECTORDB_PORT=19530 \
   floudsvectors-py
 ```
 
 - The default port is `19680` (see `appsettings.json` or override with `FLOUDS_PORT`).
 - You can override any config value using environment variables.
+- The following Milvus connection variables are optional and can be set as needed:
+  - `VECTORDB_USERNAME`
+  - `VECTORDB_PASSWORD`
+  - `VECTORDB_ENDPOINT`
+  - `VECTORDB_PORT`
 
 ### 3. Mount persistent data or logs (optional)
 
@@ -276,6 +286,10 @@ If you want to persist logs or other data outside the container:
 docker run -p 19680:19680 \
   -v $(pwd)/logs:/flouds-py/logs \
   -e FLOUDS_API_ENV=Production \
+  -e VECTORDB_USERNAME=admin \
+  -e VECTORDB_PASSWORD=yourpassword \
+  -e VECTORDB_ENDPOINT=localhost \
+  -e VECTORDB_PORT=19530 \
   floudsvectors-py
 ```
 

@@ -71,6 +71,14 @@ class BaseMilvus:
         BaseMilvus.initialize()
         self._lock: Lock = Lock()
 
+    @staticmethod
+    def __get_uri(host: str, port: int) -> str:
+        """
+        Concatenates host and port to return a URI string.
+        Example: host='milvus-standalone', port=19530 -> 'milvus-standalone:19530'
+        """
+        return f"{host}:{port}"
+
     @classmethod
     def initialize(cls) -> None:
         """
@@ -86,6 +94,7 @@ class BaseMilvus:
                         "vectordb.username is missing! Set VECTORDB_USERNAME env or in your config."
                     )
                 cls.__milvus_admin_username = username
+                logger.info(f"Using Milvus username: {cls.__milvus_admin_username}")
                 password = (
                     os.getenv("VECTORDB_PASSWORD") or APP_SETTINGS.vectordb.password
                 )
@@ -94,45 +103,53 @@ class BaseMilvus:
                         "vectordb.password is missing! Set VECTORDB_PASSWORD env or in your config."
                     )
                 cls.__milvus_admin_password = password
+
                 # Validate and set endpoint and port
+                endpoint = (
+                    os.getenv("VECTORDB_ENDPOINT") or APP_SETTINGS.vectordb.endpoint
+                )
+                # If running in Docker and endpoint does not start with protocol, add protocol
+                if not re.match(r"^https?://", endpoint):
+                    endpoint = f"http://{endpoint}"
                 if (
-                    APP_SETTINGS.vectordb.endpoint
-                    and isinstance(APP_SETTINGS.vectordb.endpoint, str)
-                    and re.match(
-                        r"^https?://|^[\w\.-]+$", APP_SETTINGS.vectordb.endpoint
-                    )
+                    endpoint
+                    and isinstance(endpoint, str)
+                    and re.match(r"^https?://|^[\w\.-]+$", endpoint)
                 ):
-                    cls.__milvus_endpoint = APP_SETTINGS.vectordb.endpoint
-                    logger.debug(f"Using Milvus endpoint: {cls.__milvus_endpoint}")
+                    cls.__milvus_endpoint = endpoint
                 else:
                     raise ValueError(
-                        "vectordb.endpoint is invalid! Must be a valid URL or hostname. set in appsettings.json or environment variable. VECTORDB_ENDPOINT"
+                        "vectordb.endpoint is invalid! Must be a valid URL or hostname. Set VECTORDB_ENDPOINT env or in your config."
                     )
-                if APP_SETTINGS.vectordb.port and APP_SETTINGS.vectordb.port > 0:
-                    cls.__milvus_port = APP_SETTINGS.vectordb.port
+                port = os.getenv("VECTORDB_PORT") or APP_SETTINGS.vectordb.port
+                try:
+                    port = int(port)
+                except Exception:
+                    port = 19530
+                if port and port > 0:
+                    cls.__milvus_port = port
                     logger.debug(f"Using Milvus port: {cls.__milvus_port}")
                 else:
                     logger.warning(
                         "vectordb.port is invalid! Using default port 19530."
                     )
                 cls.__admin_role_name = APP_SETTINGS.vectordb.admin_role_name
+                logger.info(f"Using Milvus admin role name: {cls.__admin_role_name}")
 
+                logger.info(f"Using Milvus endpoint: {cls.__milvus_endpoint}")
                 # create internal client
                 cls.__minvus_admin_client = MilvusClient(
-                    host=cls.__milvus_endpoint,
-                    port=cls.__milvus_port,
+                    uri=cls._get_milvus_url(),
                     user=cls.__milvus_admin_username,
                     password=cls.__milvus_admin_password,
                 )
                 try:
                     # HINT: Try a simple operation to verify connection
-                    if not cls.check_connection():
+                    if not cls.check_connection(cls.__minvus_admin_client):
                         logger.error("Milvus connection failed!")
                         raise ConnectionError(
                             "Failed to connect to Milvus. Please check your configuration."
                         )
-                    else:
-                        logger.info("Milvus connection is healthy!")
                 except Exception as ex:
                     logger.error(f"Failed to connect to Milvus: {ex}")
                     raise ConnectionError(f"Failed to connect to Milvus: {ex}")
@@ -238,30 +255,23 @@ class BaseMilvus:
             logger.error(f"cannot create role '{role_name}': {ex}")
             raise Exception(f"Failed to create role '{role_name}': {ex}")
 
-    # @staticmethod
-    # def _get_admin_client() -> MilvusClient:
-    #     return MilvusClient(
-    #         host=BaseMilvus.__milvus_endpoint,
-    #         port=BaseMilvus.__milvus_port,
-    #         user=BaseMilvus.__milvus_admin_username,
-    #         password=BaseMilvus.__milvus_admin_password,
-    #     )
-
     @classmethod
     def __get_internal_admin_client(cls) -> MilvusClient:
         """
         Returns the internal admin MilvusClient, initializing if necessary.
         """
-        if (
-            cls.__minvus_admin_client is None
-        ):  # HINT: Check if the client is already initialized
-            # create internal client
-            cls.__minvus_admin_client = MilvusClient(
-                host=cls.__milvus_endpoint,
-                port=cls.__milvus_port,
-                user=cls.__milvus_admin_username,
-                password=cls.__milvus_admin_password,
-            )
+        if not cls.__initialized:
+            if (
+                cls.__minvus_admin_client is None
+            ):  # HINT: Check if the client is already initialized
+                # create internal client
+                cls.__minvus_admin_client = MilvusClient(
+                    uri=cls._get_milvus_url(),
+                    user=cls.__milvus_admin_username,
+                    password=cls.__milvus_admin_password,
+                )
+        else:
+            logger.debug(f"Initialized: Milvus admin client already exists")
         return cls.__minvus_admin_client
 
     @classmethod
@@ -314,39 +324,6 @@ class BaseMilvus:
             suffix = "".join(random.choice(letters) for _ in range(suffix_length))
             return prefix + suffix
         return current_client_id
-
-    @staticmethod
-    def __valid_client_id(client_id: str, tenant_code: str) -> bool:
-        """
-        Checks if the client_id is valid for the given tenant.
-        """
-        tenant_code = tenant_code.lower()
-        prefix = f"{tenant_code}_"
-        return (
-            not client_id
-            or not client_id.lower().startswith(prefix)
-            or len(client_id) != BaseMilvus.__CLIENT_ID_LENGTH
-        )
-
-    @staticmethod
-    def __valid_client_secret(client_secret: str) -> bool:
-        """
-        Checks if the client_secret is valid (urlsafe base64 and correct length).
-        """
-        size = BaseMilvus.__CLIENT_SECRET_LENGTH
-        # Generate a new urlsafe key to get the expected length
-        expected_length = len(
-            base64.urlsafe_b64encode(os.urandom(size)).decode("utf-8")
-        )
-
-        def is_urlsafe_base64(s: str) -> bool:
-            return re.fullmatch(r"^[A-Za-z0-9_\-]+={0,2}$", s) is not None
-
-        return (
-            not client_secret
-            or len(client_secret) != expected_length
-            or not is_urlsafe_base64(client_secret)
-        )
 
     @staticmethod
     def __generate_secret_key(current_secret_key: str) -> str:
@@ -453,9 +430,11 @@ class BaseMilvus:
         """
         Returns a MilvusClient for the given tenant credentials.
         """
+        logger.debug(
+            f"host: {BaseMilvus.__milvus_endpoint}, port: {BaseMilvus.__milvus_port} - Creating MilvusClient for tenant: {tenant_client_id}, database: {tenant_database}"
+        )
         return MilvusClient(
-            host=BaseMilvus.__milvus_endpoint,
-            port=BaseMilvus.__milvus_port,
+            uri=BaseMilvus._get_milvus_url(),
             user=tenant_client_id,
             password=tenant_client_secret,
             database=tenant_database,
@@ -605,7 +584,6 @@ class BaseMilvus:
                         f"Index '{index_name}' created on 'vector' in '{collection_name}'."
                     )
                     created = True
-                    self._has_index = True
                 else:
                     logger.debug(
                         f"Index '{index_name}' already exists on '{collection_name}'."
@@ -672,16 +650,15 @@ class BaseMilvus:
             raise Exception(f"Failed to grant privileges: {e}")
 
     @staticmethod
-    def check_connection() -> bool:
+    def check_connection(client) -> bool:
         """
         Returns True if the internal admin client can connect to Milvus and list collections, False otherwise.
         """
-        client = BaseMilvus.__get_internal_admin_client()
         if client is None:
             logger.error("Milvus admin client is not initialized.")
             return False
         try:
-            client.list_collections()
+            client.list_collections(timeout=2)  # Set a timeout for the operation
             logger.info("Milvus connection is healthy.")
             return True
         except Exception as ex:
@@ -959,8 +936,7 @@ class BaseMilvus:
         return cls.__tenant_connections.get_or_add(
             tenant_code,
             lambda: MilvusClient(
-                host=cls.__milvus_endpoint,
-                port=cls.__milvus_port,
+                uri=cls._get_milvus_url(),
                 user=cls.__milvus_admin_username,
                 password=cls.__milvus_admin_password,
                 db_name=db_name,
