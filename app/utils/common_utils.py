@@ -23,13 +23,10 @@ class CommonUtils:
         return target
 
     @staticmethod
-    def parse_extra_fields(request_obj, base_model_cls):
-        """
-        Extracts extra fields from a Pydantic request object that are not defined in the base model.
-        Returns a dict of extra fields.
-        """
-        return {
-            k: v
-            for k, v in request_obj.__dict__.items()
-            if k not in base_model_cls.__fields__
-        }
+    def parse_extra_fields(request, model_class):
+        # Get all fields defined in the model
+        model_fields = set(model_class.__fields__.keys())
+        # Convert request to dict (if it's a Pydantic model)
+        req_dict = request.dict() if hasattr(request, "dict") else dict(request)
+        # Extract extra fields
+        return {k: v for k, v in req_dict.items() if k not in model_fields}

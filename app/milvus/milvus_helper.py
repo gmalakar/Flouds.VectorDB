@@ -12,9 +12,9 @@ from app.logger import get_logger
 from app.milvus.base_milvus import BaseMilvus
 from app.milvus.vector_store import VectorStore
 from app.models.embeded_meta import EmbeddedMeta
-from app.models.embeded_vectors import EmbeddedVectors
 from app.models.insert_request import InsertEmbeddedRequest
 from app.models.search_request import SearchEmbeddedRequest
+from app.models.set_user_request import SetUserRequest
 from app.modules.concurrent_dict import ConcurrentDict
 
 logger = get_logger("milvus_helper")
@@ -88,14 +88,14 @@ class MilvusHelper(BaseMilvus):
         return tenant_store.search_store(request=request, kwargs=kwargs)
 
     @staticmethod
-    def set_user(tenant_code: str, token: str, **kwargs: Any) -> dict:
+    def set_user(request: SetUserRequest, token: str, **kwargs: Any) -> dict:
         """
         Sets up a user for a tenant, creating all necessary resources if missing.
         Uses a lock to ensure thread safety.
         """
         client_id, secret_key = MilvusHelper._split_token(token)
         logger.debug(
-            f"Setting up vector store for tenant '{tenant_code}' with client_id '{client_id}' and secret_key '{secret_key}'."
+            f"Setting up user for tenant '{request.tenant_code}'"
         )
         valid_token = BaseMilvus._validate_token(token=token)
         if not valid_token:
@@ -104,10 +104,10 @@ class MilvusHelper(BaseMilvus):
         super_user = BaseMilvus._is_super_user(user_id=client_id)
         if not super_user:
             logger.error(f"User '{client_id}' is not a super user.")
-            raise PermissionError("User is not a super user.")
+            raise PermissionError("User is not a super user to perform this operation.")
 
         return MilvusHelper._create_user_for_tenant(
-            tenant_code=tenant_code, token=token, **kwargs
+            tenant_code=request.tenant_code, reset_user=request.reset_user, token=token, **kwargs
         )
 
     @staticmethod
@@ -174,7 +174,7 @@ class MilvusHelper(BaseMilvus):
                 f"Setting up vector store for tenant '{tenant_code}' with client_id '{client_id}'."
             )
             return BaseMilvus._setup_tenant_vector_store(
-                tenant_code=tenant_code, vector_dimension=vector_dimension
+                tenant_code=tenant_code, vector_dimension=vector_dimension, **kwargs
             )
 
     @staticmethod

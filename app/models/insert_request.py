@@ -7,7 +7,7 @@
 from pydantic import Field
 
 from app.models.base_request import BaseRequest
-from app.models.embeded_vectors import EmbeddedVectors
+from app.models.embeded_vector import EmbeddedVector
 
 
 class InsertEmbeddedRequest(BaseRequest):
@@ -15,7 +15,7 @@ class InsertEmbeddedRequest(BaseRequest):
     Request model for text embedding.
     """
 
-    data: list[EmbeddedVectors] = Field(
+    data: list[EmbeddedVector] = Field(
         ...,
         description="The vector to be stored in the vector store. This field is required.",
     )

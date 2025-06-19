@@ -9,12 +9,12 @@ from typing import Any
 
 from app.logger import get_logger
 from app.milvus.milvus_helper import MilvusHelper
-from app.models.base_request import BaseRequest
 from app.models.base_response import BaseResponse
 from app.models.insert_request import InsertEmbeddedRequest
 from app.models.list_response import ListResponse
 from app.models.search_request import SearchEmbeddedRequest
 from app.models.search_response import SearchEmbeddedResponse
+from app.models.set_user_request import SetUserRequest
 from app.models.set_vector_store_request import SetVectorStoreRequest
 
 logger = get_logger("vector_store_service")
@@ -26,7 +26,7 @@ class VectorStoreService:
     """
 
     @classmethod
-    def set_user(cls, request: BaseRequest, token: str, **kwargs: Any) -> ListResponse:
+    def set_user(cls, request: SetUserRequest, token: str, **kwargs: Any) -> ListResponse:
         """
         Sets a user in the vector store for the given tenant.
 
@@ -40,7 +40,7 @@ class VectorStoreService:
         """
         start_time: float = time.time()
         response: ListResponse = ListResponse(
-            for_tenant=request.tenant_code,
+            tenant_code=request.tenant_code,
             success=True,
             message="User set successfully.",
             time_taken=0.0,
@@ -49,7 +49,7 @@ class VectorStoreService:
         try:
             logger.debug(f"User set request: {request.tenant_code}, kwargs: {kwargs}")
             response.results = MilvusHelper.set_user(
-                tenant_code=request.tenant_code, token=token, **kwargs
+                request=request, token=token, **kwargs
             )
             response.message = response.results.get("message", "User set successfully.")
         except Exception as e:
@@ -78,14 +78,14 @@ class VectorStoreService:
         """
         start_time: float = time.time()
         response: ListResponse = ListResponse(
-            for_tenant=requests.tenant_code,
+            tenant_code=requests.tenant_code,
             success=True,
             message="vector store set or retrieved successfully.",
             results={},
             time_taken=0.0,
         )
         try:
-            logger.debug(f"vector store request: {requests.tenant_code}")
+            logger.debug(f"set_vector_store: kwargs received: {kwargs}")
             response.results = MilvusHelper.set_vector_store(
                 tenant_code=requests.tenant_code,
                 token=token,
@@ -118,7 +118,7 @@ class VectorStoreService:
         """
         start_time: float = time.time()
         response: BaseResponse = BaseResponse(
-            for_tenant=requests.tenant_code,
+            tenant_code=requests.tenant_code,
             success=True,
             message="Vector store inserted successfully.",
             time_taken=0.0,
@@ -159,7 +159,7 @@ class VectorStoreService:
         """
         start_time: float = time.time()
         response: SearchEmbeddedResponse = SearchEmbeddedResponse(
-            for_tenant=requests.tenant_code,
+            tenant_code=requests.tenant_code,
             model=requests.model,
             limit=requests.limit,
             offset=requests.offset,

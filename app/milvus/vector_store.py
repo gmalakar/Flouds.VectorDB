@@ -14,7 +14,7 @@ from app.app_init import APP_SETTINGS
 from app.logger import get_logger
 from app.milvus.base_milvus import BaseMilvus
 from app.models.embeded_meta import EmbeddedMeta
-from app.models.embeded_vectors import EmbeddedVectors
+from app.models.embeded_vector import EmbeddedVector
 from app.models.search_request import SearchEmbeddedRequest
 
 logger = get_logger("Vector Store")
@@ -75,22 +75,21 @@ class VectorStore(BaseMilvus):
         return self._get_or_create_tenant_connection(self._tenant_code)
 
     @staticmethod
-    def __convert_to_field_data(
-        response: List[EmbeddedVectors], meta: dict = None
-    ) -> List[dict]:
+    def __convert_to_field_data(response: List[EmbeddedVector]) -> List[dict]:
         # Return a list of dicts matching the schema (excluding auto_id "id")
-        meta_json = json.dumps(meta) if meta else "{}"
         return [
             {
                 "chunk": e.chunk,
                 "model": e.model.lower(),
                 "vector": e.vector,
-                "meta": meta_json,  # Add meta as JSON string
+                "meta": (
+                    json.dumps(e.metadata) if e.metadata else "{}"
+                ),  # Add meta as JSON string
             }
             for e in response
         ]
 
-    def insert_data(self, vector: List[EmbeddedVectors], **kwargs: Any) -> None:
+    def insert_data(self, vector: List[EmbeddedVector], **kwargs: Any) -> None:
         """
         Inserts embedded vectors into the Milvus collection for this tenant.
 
@@ -116,7 +115,7 @@ class VectorStore(BaseMilvus):
             logger.debug(f"Using tenant client for collection '{self._store_name}'")
             client.insert(
                 collection_name=self._store_name,
-                data=self.__convert_to_field_data(vector, meta=kwargs),
+                data=self.__convert_to_field_data(vector),
                 partition_name=kwargs.get("partition_name", ""),
             )
             logger.info(

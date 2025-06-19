@@ -7,7 +7,7 @@
 from pydantic import Field
 
 from app.models.base_request import BaseRequest
-from app.models.embeded_vectors import EmbeddedVectors
+from app.models.embeded_vector import EmbeddedVector
 
 
 class SearchEmbeddedRequest(BaseRequest):

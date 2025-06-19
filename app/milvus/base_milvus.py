@@ -385,42 +385,55 @@ class BaseMilvus:
         return current_user
 
     @staticmethod
-    def _create_user_for_tenant(tenant_code: str, **kwargs: Any) -> dict:
+    def _create_user_for_tenant(tenant_code: str, reset_user: bool, **kwargs: Any) -> dict:
         """
-        Creates a user if it does not exist. Returns a summary dict.
-        Thread-safe.
+        Creates a user for the tenant if it does not exist, or resets if requested.
+        Returns a summary dict.
+        Thread-safe for user creation.
         """
         summary = {
             "tenant_code": tenant_code,
             "client_id": None,
             "client_secret": None,
             "existing_user": False,
-            "message": "New User created successfully.",
+            "message": "",
         }
         admin_client = BaseMilvus.__get_internal_admin_client()
         current_user = BaseMilvus._get_current_user_of_a_tenant(tenant_code)
-        if current_user is not None:
-            summary["existing_user"] = True
-            summary["client_id"] = current_user
-            summary["message"] = (
-                f"User '{current_user}' already exists for tenant '{tenant_code}'."
-            )
-            return summary
-        else:
-            # Generate a new user name
-            with BaseMilvus.__user_create_lock:
+
+        if current_user:
+            if reset_user:
                 try:
-                    # HINT: Ensure client_id and secret_key are provided
-                    client_id = BaseMilvus.__generate_client_id("none", tenant_code)
-                    secret_key = BaseMilvus.__generate_secret_key("none")
-                    admin_client.create_user(user_name=client_id, password=secret_key)
-                    summary["existing_user"] = False
-                    summary["client_secret"] = secret_key
-                    summary["client_id"] = client_id
-                    logger.debug(f"User '{client_id}' created successfully!")
-                except Exception as ex:
-                    logger.error(f"Failed to create user '{client_id}': {ex}")
-                    summary["message"] = f"Failed to create user '{client_id}': {ex}"
+                    admin_client.drop_user(user_name=current_user)
+                    logger.debug(f"User '{current_user}' dropped successfully.")
+                except MilvusException as e:
+                    logger.error(f"Failed to drop user '{current_user}': {e}")
+                    summary["message"] = f"Failed to drop user '{current_user}': {e}"
+                    return summary
+            else:
+                summary.update({
+                    "existing_user": True,
+                    "client_id": current_user,
+                    "message": f"User '{current_user}' already exists for tenant '{tenant_code}'.",
+                })
+                return summary
+
+        # Create new user (thread-safe)
+        with BaseMilvus.__user_create_lock:
+            try:
+                client_id = BaseMilvus.__generate_client_id("none", tenant_code)
+                secret_key = BaseMilvus.__generate_secret_key("none")
+                admin_client.create_user(user_name=client_id, password=secret_key)
+                summary.update({
+                    "existing_user": False,
+                    "client_id": client_id,
+                    "client_secret": secret_key,
+                    "message": f"User '{client_id}' created successfully.",
+                })
+                logger.debug(f"User '{client_id}' created successfully!")
+            except Exception as ex:
+                logger.error(f"Failed to create user '{client_id}': {ex}")
+                summary["message"] = f"Failed to create user '{client_id}': {ex}"
         return summary
 
     @staticmethod
@@ -811,7 +824,7 @@ class BaseMilvus:
                 or create_another_client_id
             ):
                 if current_user and replace_current_client_id:
-                    admin_client.delete_user(user_name=current_user)
+                    admin_client.drop_user(user_name=current_user)
                 client_id = BaseMilvus.__generate_client_id("none", tenant_code)
                 secret_key = BaseMilvus.__generate_secret_key("none")
                 admin_client.create_user(user_name=client_id, password=secret_key)

@@ -19,7 +19,7 @@ class BaseResponse(BaseModel):
         "Operation completed successfully.",
         description="A message providing additional information about the operation.",
     )
-    for_tenant: str = Field(
+    tenant_code: str = Field(
         None,
         description="The tenant for which the operation was performed. If not specified, the operation is for the default tenant.",
     )

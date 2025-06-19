@@ -23,7 +23,7 @@ router: APIRouter = APIRouter()
 logger = get_logger("router")
 
 
-@router.post("/set_vector_store", tags=["vector_store"], response_model=ListResponse)
+@router.post("/set_vector_store", tags=["vector-store"], response_model=ListResponse)
 async def set_vector_store(
     request: SetVectorStoreRequest, token: str = Depends(get_token)
 ) -> ListResponse:
@@ -39,23 +39,26 @@ async def set_vector_store(
     logger.debug(
         f"Vector store request set_vector_store for tenant: {request.tenant_code}"
     )
+    extra_fields = CommonUtils.parse_extra_fields(
+        request, SetVectorStoreRequest
+    )
     response: ListResponse = await asyncio.to_thread(
         VectorStoreService.set_vector_store,
         request,
         token=token,
-        **CommonUtils.parse_extra_fields(request, SetVectorStoreRequest),
+        **extra_fields
     )
-    logger.debug(f"Vector store response: {response.for_tenant} - {response.success}")
+    logger.debug(f"Vector store response: {response.tenant_code} - {response.success}")
     if not response.success:
         logger.error(f"Error in vector store operation: {response.message}")
     else:
         logger.info(
-            f"Vector store operation successful for tenant: {response.for_tenant}"
+            f"Vector store operation successful for tenant: {response.tenant_code}"
         )
     return response
 
 
-@router.post("/insert", tags=["vector_store"], response_model=BaseResponse)
+@router.post("/insert", tags=["vector-store"], response_model=BaseResponse)
 async def insert(
     request: InsertEmbeddedRequest, token: str = Depends(get_token)
 ) -> BaseResponse:
@@ -75,17 +78,17 @@ async def insert(
         token=token,
         **CommonUtils.parse_extra_fields(request, InsertEmbeddedRequest),
     )
-    logger.debug(f"Vector store response: {response.for_tenant} - {response.success}")
+    logger.debug(f"Vector store response: {response.tenant_code} - {response.success}")
     if not response.success:
         logger.error(f"Error in vector store operation: {response.message}")
     else:
         logger.info(
-            f"Vector store operation successful for tenant: {response.for_tenant}"
+            f"Vector store operation successful for tenant: {response.tenant_code}"
         )
     return response
 
 
-@router.post("/search", tags=["vector_store"], response_model=SearchEmbeddedResponse)
+@router.post("/search", tags=["vector-store"], response_model=SearchEmbeddedResponse)
 async def search(
     request: SearchEmbeddedRequest, token: str = Depends(get_token)
 ) -> SearchEmbeddedResponse:
@@ -105,11 +108,11 @@ async def search(
         token=token,
         **CommonUtils.parse_extra_fields(request, SearchEmbeddedRequest),
     )
-    logger.debug(f"Vector store response: {response.for_tenant} - {response.success}")
+    logger.debug(f"Vector store response: {response.tenant_code} - {response.success}")
     if not response.success:
         logger.error(f"Error in vector store operation: {response.message}")
     else:
         logger.info(
-            f"Vector store operation successful for tenant: {response.for_tenant}"
+            f"Vector store operation successful for tenant: {response.tenant_code}"
         )
     return response

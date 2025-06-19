@@ -1,0 +1,20 @@
+# =============================================================================
+# File: base_request.py
+# Date: 2025-06-10
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
+from pydantic import BaseModel, Field
+
+from app.models.base_request import BaseRequest
+
+
+class SetUserRequest(BaseRequest):
+    """
+    Request model for setting a user in the vector store.
+    """
+
+    reset_user: bool = Field(
+        False,
+        description="Indicates whether to reset the user. This field is required.",
+    )

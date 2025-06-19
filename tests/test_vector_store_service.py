@@ -10,7 +10,7 @@ import pytest
 
 from app.models.base_request import BaseRequest
 from app.models.embeded_meta import EmbeddedMeta
-from app.models.embeded_vectors import EmbeddedVectors
+from app.models.embeded_vector import EmbeddedVector
 from app.models.insert_request import InsertEmbeddedRequest
 from app.models.list_response import ListResponse
 from app.models.search_request import SearchEmbeddedRequest
@@ -32,7 +32,7 @@ def set_vector_store_request():
 
 @pytest.fixture
 def insert_embedded_request():
-    vec = EmbeddedVectors(chunk="abc", model="test", vector=[0.1, 0.2, 0.3])
+    vec = EmbeddedVector(chunk="abc", model="test", vector=[0.1, 0.2, 0.3])
     return InsertEmbeddedRequest(tenant_code="tenant1", token="user:pass", data=[vec])
 
 
@@ -61,7 +61,7 @@ def test_set_user_success(base_request):
         mock_set_user.assert_called_once_with(tenant_code="tenant1", token="user:pass")
         assert resp.success is True
         assert resp.message == "User created"
-        assert resp.for_tenant == "tenant1"
+        assert resp.tenant_code == "tenant1"
         assert isinstance(resp.time_taken, float)
         assert isinstance(resp.results, dict)
 
@@ -74,7 +74,7 @@ def test_set_user_failure(base_request):
         resp = VectorStoreService.set_user(base_request, token="user:pass")
         assert resp.success is False
         assert "fail" in resp.message
-        assert resp.for_tenant == "tenant1"
+        assert resp.tenant_code == "tenant1"
         assert resp.results == {}
 
 
@@ -88,7 +88,7 @@ def test_set_vector_store_success(set_vector_store_request):
         )
         assert resp.success is True
         assert resp.results == {"result": "ok"}
-        assert resp.for_tenant == "tenant1"
+        assert resp.tenant_code == "tenant1"
 
 
 def test_set_vector_store_failure(set_vector_store_request):
@@ -101,7 +101,7 @@ def test_set_vector_store_failure(set_vector_store_request):
         )
         assert resp.success is False
         assert "fail" in resp.message
-        assert resp.for_tenant == "tenant1"
+        assert resp.tenant_code == "tenant1"
         assert resp.results == {}
 
 
@@ -115,7 +115,7 @@ def test_insert_into_vector_store_success(insert_embedded_request):
         )
         assert resp.success is True
         assert "1 vectors inserted" in resp.message
-        assert resp.for_tenant == "tenant1"
+        assert resp.tenant_code == "tenant1"
 
 
 def test_insert_into_vector_store_failure(insert_embedded_request):
@@ -128,18 +128,18 @@ def test_insert_into_vector_store_failure(insert_embedded_request):
         )
         assert resp.success is False
         assert "fail" in resp.message
-        assert resp.for_tenant == "tenant1"
+        assert resp.tenant_code == "tenant1"
 
 
 def test_list_response_default_values(base_request):
     response: ListResponse = ListResponse(
-        for_tenant=base_request.tenant_code,
+        tenant_code=base_request.tenant_code,
         success=True,
         message="User set successfully.",
         results={},
         time_taken=0.0,
     )
-    assert response.for_tenant == "tenant1"
+    assert response.tenant_code == "tenant1"
     assert response.success is True
     assert response.message == "User set successfully."
     assert response.results == {}
@@ -148,7 +148,7 @@ def test_list_response_default_values(base_request):
 
 def test_list_response_error_handling(base_request):
     response: ListResponse = ListResponse(
-        for_tenant=base_request.tenant_code,
+        tenant_code=base_request.tenant_code,
         success=False,
         message="",
         results={},
@@ -161,7 +161,7 @@ def test_list_response_error_handling(base_request):
         response.message = f"Error setting user: {str(e)}"
         response.results = {}
 
-    assert response.for_tenant == "tenant1"
+    assert response.tenant_code == "tenant1"
     assert response.success is False
     assert response.message == "Error setting user: An error occurred"
     assert response.results == {}
@@ -183,7 +183,7 @@ def test_search_in_vector_store_success(search_request):
         assert resp.success is True
         assert resp.data == fake_results
         assert resp.message == "Vector store search completed successfully."
-        assert resp.for_tenant == "tenant1"
+        assert resp.tenant_code == "tenant1"
 
 
 def test_search_in_vector_store_no_results(search_request):
@@ -197,7 +197,7 @@ def test_search_in_vector_store_no_results(search_request):
         assert resp.success is False
         assert resp.data == []
         assert resp.message == "No vectors found in the vector store."
-        assert resp.for_tenant == "tenant1"
+        assert resp.tenant_code == "tenant1"
 
 
 def test_search_in_vector_store_failure(search_request):
@@ -211,4 +211,4 @@ def test_search_in_vector_store_failure(search_request):
         assert resp.success is False
         assert "fail" in resp.message
         assert resp.data == []
-        assert resp.for_tenant == "tenant1"
+        assert resp.tenant_code == "tenant1"
