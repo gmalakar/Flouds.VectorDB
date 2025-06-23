@@ -94,9 +94,7 @@ class MilvusHelper(BaseMilvus):
         Uses a lock to ensure thread safety.
         """
         client_id, secret_key = MilvusHelper._split_token(token)
-        logger.debug(
-            f"Setting up user for tenant '{request.tenant_code}'"
-        )
+        logger.debug(f"Setting up user for tenant '{request.tenant_code}'")
         valid_token = BaseMilvus._validate_token(token=token)
         if not valid_token:
             logger.error(f"Invalid token: {token}")
@@ -107,7 +105,10 @@ class MilvusHelper(BaseMilvus):
             raise PermissionError("User is not a super user to perform this operation.")
 
         return MilvusHelper._create_user_for_tenant(
-            tenant_code=request.tenant_code, reset_user=request.reset_user, token=token, **kwargs
+            tenant_code=request.tenant_code,
+            reset_user=request.reset_user,
+            token=token,
+            **kwargs,
         )
 
     @staticmethod

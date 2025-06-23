@@ -32,7 +32,7 @@ def set_vector_store_request():
 
 @pytest.fixture
 def insert_embedded_request():
-    vec = EmbeddedVector(chunk="abc", model="test", vector=[0.1, 0.2, 0.3])
+    vec = EmbeddedVector(key="vec-1", chunk="abc", model="test", vector=[0.1, 0.2, 0.3])
     return InsertEmbeddedRequest(tenant_code="tenant1", token="user:pass", data=[vec])
 
 
@@ -58,7 +58,10 @@ def test_set_user_success(base_request):
     ) as mock_set_user:
         mock_set_user.return_value = {"message": "User created"}
         resp = VectorStoreService.set_user(base_request, token="user:pass")
-        mock_set_user.assert_called_once_with(tenant_code="tenant1", token="user:pass")
+        mock_set_user.assert_called_once()
+        _, kwargs = mock_set_user.call_args
+        assert kwargs["request"] == base_request
+        assert kwargs["token"] == "user:pass"
         assert resp.success is True
         assert resp.message == "User created"
         assert resp.tenant_code == "tenant1"
@@ -70,8 +73,12 @@ def test_set_user_failure(base_request):
     with patch(
         "app.services.vector_store_service.MilvusHelper.set_user",
         side_effect=Exception("fail"),
-    ):
+    ) as mock_set_user:
         resp = VectorStoreService.set_user(base_request, token="user:pass")
+        mock_set_user.assert_called_once()
+        _, kwargs = mock_set_user.call_args
+        assert kwargs["request"] == base_request
+        assert kwargs["token"] == "user:pass"
         assert resp.success is False
         assert "fail" in resp.message
         assert resp.tenant_code == "tenant1"

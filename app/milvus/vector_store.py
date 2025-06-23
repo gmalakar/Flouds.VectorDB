@@ -76,12 +76,15 @@ class VectorStore(BaseMilvus):
 
     @staticmethod
     def __convert_to_field_data(response: List[EmbeddedVector]) -> List[dict]:
-        # Return a list of dicts matching the schema (excluding auto_id "id")
+        # Use the dynamic vector field name from BaseMilvus
+        vector_field_name = BaseMilvus._get_vector_field_name()
+        primary_key_name = BaseMilvus._get_primary_key_name()
         return [
             {
+                primary_key_name: e.key,  # Use dynamic primary key name
                 "chunk": e.chunk,
                 "model": e.model.lower(),
-                "vector": e.vector,
+                vector_field_name: e.vector,  # Use dynamic field name
                 "meta": (
                     json.dumps(e.metadata) if e.metadata else "{}"
                 ),  # Add meta as JSON string
@@ -91,20 +94,23 @@ class VectorStore(BaseMilvus):
 
     def insert_data(self, vector: List[EmbeddedVector], **kwargs: Any) -> None:
         """
-        Inserts embedded vectors into the Milvus collection for this tenant.
+        Upserts embedded vectors into the Milvus collection for this tenant.
+        The primary key for each vector is taken from the 'key' field of each EmbeddedVector.
+        The primary key name is determined by BaseMilvus._get_primary_key_name().
 
         Args:
-            vector (List[EmbeddedVectors]): The vectors to insert.
+            vector (List[EmbeddedVector]): The vectors to insert/upsert.
             **kwargs: Extra metadata to store as JSON in the 'meta' field.
 
         Raises:
-            Exception: If insertion fails.
+            Exception: If upsert fails.
         """
         try:
-            for i, e in enumerate(vector):
-                logger.debug(f"Item {i}: vector length = {len(e.vector)}")
+            primary_key_name = BaseMilvus._get_primary_key_name()
+            logger.debug(f"Primary key name for upsert: {primary_key_name}")
+
             logger.info(
-                f"Inserting {len(vector)} vectors into Milvus collection '{self._store_name}'"
+                f"Upserting {len(vector)} vectors into Milvus collection '{self._store_name}'"
             )
             if not self.__set_collection():
                 raise Exception(f"Failed to set collection for {self._store_name}")
@@ -113,18 +119,23 @@ class VectorStore(BaseMilvus):
             )
             client = self._get_tenant_client()
             logger.debug(f"Using tenant client for collection '{self._store_name}'")
-            client.insert(
+
+            # Prepare data for upsert: use each vector's key as the primary key
+            data_to_upsert = self.__convert_to_field_data(vector)
+
+            client.upsert(
                 collection_name=self._store_name,
-                data=self.__convert_to_field_data(vector),
+                data=data_to_upsert,
                 partition_name=kwargs.get("partition_name", ""),
             )
+
             logger.info(
-                f"Successfully inserted {len(vector)} vectors into Milvus collection '{self._store_name}'"
+                f"Successfully upserted {len(vector)} vectors into Milvus collection '{self._store_name}'"
             )
             client.flush(self._store_name)
         except Exception as ex:
-            logger.exception(f"Error inserting data into Milvus collection: {ex}")
-            raise Exception("Error inserting data into Milvus collection") from ex
+            logger.exception(f"Error upserting data into Milvus collection: {ex}")
+            raise Exception("Error upserting data into Milvus collection") from ex
 
     # def search_embedded_data(
     #     self, text_to_search: str, vector: List[float], parameters: dict
@@ -163,6 +174,9 @@ class VectorStore(BaseMilvus):
             if value is not None:
                 params[key] = value
 
+        # Use the dynamic vector field name
+        vector_field_name = BaseMilvus._get_vector_field_name()
+
         search_params = {
             "metric_type": kwargs.get(
                 "metric_type", getattr(request, "metric_type", None)
@@ -193,7 +207,7 @@ class VectorStore(BaseMilvus):
         result = client.search(
             collection_name=self._store_name,
             data=[request.vector],
-            anns_field="vector",
+            anns_field=vector_field_name,  # Use the custom vector field name here
             search_params=search_params,
             limit=search_params.get("limit"),
             output_fields=search_params["output_fields"],

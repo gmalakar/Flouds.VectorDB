@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 
 class EmbeddedVector(BaseModel):
+    key: str = Field(..., description="The primary key.")
     chunk: str = Field(..., description="The text chunk.")
     model: str = Field(..., description="The model used for embedding.")
     metadata: dict = Field(

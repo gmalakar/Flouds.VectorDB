@@ -39,6 +39,8 @@ class BaseMilvus:
 
     __tenant_connections: ConcurrentDict = ConcurrentDict("_tenant_connections")
     __COLLECTION_SCHEMA_NAME: str = "vector_store_schema"
+    __PRIMARY_FIELD_NAME: str = "flouds_vector_id"
+    __VECTOR_FIELD_NAME: str = "flouds_vector"
     __DB_NAME_SUFFIX: str = "_vectorstore"
     __TENANT_NAME_SUFFIX: str = "_tenant_role"
     __CLIENT_ID_LENGTH: int = 32
@@ -385,7 +387,9 @@ class BaseMilvus:
         return current_user
 
     @staticmethod
-    def _create_user_for_tenant(tenant_code: str, reset_user: bool, **kwargs: Any) -> dict:
+    def _create_user_for_tenant(
+        tenant_code: str, reset_user: bool, **kwargs: Any
+    ) -> dict:
         """
         Creates a user for the tenant if it does not exist, or resets if requested.
         Returns a summary dict.
@@ -411,11 +415,13 @@ class BaseMilvus:
                     summary["message"] = f"Failed to drop user '{current_user}': {e}"
                     return summary
             else:
-                summary.update({
-                    "existing_user": True,
-                    "client_id": current_user,
-                    "message": f"User '{current_user}' already exists for tenant '{tenant_code}'.",
-                })
+                summary.update(
+                    {
+                        "existing_user": True,
+                        "client_id": current_user,
+                        "message": f"User '{current_user}' already exists for tenant '{tenant_code}'.",
+                    }
+                )
                 return summary
 
         # Create new user (thread-safe)
@@ -424,12 +430,14 @@ class BaseMilvus:
                 client_id = BaseMilvus.__generate_client_id("none", tenant_code)
                 secret_key = BaseMilvus.__generate_secret_key("none")
                 admin_client.create_user(user_name=client_id, password=secret_key)
-                summary.update({
-                    "existing_user": False,
-                    "client_id": client_id,
-                    "client_secret": secret_key,
-                    "message": f"User '{client_id}' created successfully.",
-                })
+                summary.update(
+                    {
+                        "existing_user": False,
+                        "client_id": client_id,
+                        "client_secret": secret_key,
+                        "message": f"User '{client_id}' created successfully.",
+                    }
+                )
                 logger.debug(f"User '{client_id}' created successfully!")
             except Exception as ex:
                 logger.error(f"Failed to create user '{client_id}': {ex}")
@@ -461,18 +469,65 @@ class BaseMilvus:
         return ["chunk", "meta"]
 
     @staticmethod
+    def _get_primary_key_name() -> str:
+        """
+        Returns the primary key name from settings or the default.
+        """
+        return APP_SETTINGS.vectordb.primary_key or BaseMilvus.__PRIMARY_FIELD_NAME
+
+    @staticmethod
+    def _get_vector_field_name() -> str:
+        """
+        Returns the vector field name from settings or the default.
+        """
+        return APP_SETTINGS.vectordb.vector_field_name or BaseMilvus.__VECTOR_FIELD_NAME
+
+    @staticmethod
+    def _get_primary_key_type() -> str:
+        """
+        Returns the primary key type from settings or 'VARCHAR' as default.
+        """
+        return (APP_SETTINGS.vectordb.primary_key_type or "VARCHAR").upper()
+
+    @staticmethod
+    def _get_dtype_map() -> dict:
+        """
+        Returns a mapping from string type names to Milvus DataType.
+        """
+        return {
+            "VARCHAR": DataType.VARCHAR,
+            "INT64": DataType.INT64,
+            "INT": DataType.INT64,
+            "STRING": DataType.VARCHAR,
+        }
+
+    @staticmethod
     def _get_vector_store_schema(name: str, dimension: int = 256) -> CollectionSchema:
         """
         Returns the collection schema for a vector store.
+        Uses custom primary key and type from settings.
+        Uses custom vector field name from settings.
         """
+        primary_key = BaseMilvus._get_primary_key_name()
+        primary_key_type = BaseMilvus._get_primary_key_type()
+        vector_field_name = BaseMilvus._get_vector_field_name()
+
+        dtype_map = BaseMilvus._get_dtype_map()
+        dtype = dtype_map.get(primary_key_type, DataType.VARCHAR)
+        auto_id = dtype == DataType.INT64
+
+        pk_field_kwargs = {
+            "name": primary_key,
+            "dtype": dtype,
+            "is_primary": True,
+            "auto_id": auto_id,
+            "description": f"Primary key ({primary_key_type})",
+        }
+        if dtype == DataType.VARCHAR:
+            pk_field_kwargs["max_length"] = 256
+
         fields = [
-            FieldSchema(
-                name="id",
-                dtype=DataType.INT64,
-                is_primary=True,
-                auto_id=True,
-                description="Primary key",
-            ),
+            FieldSchema(**pk_field_kwargs),
             FieldSchema(
                 name="chunk",
                 dtype=DataType.VARCHAR,
@@ -486,15 +541,15 @@ class BaseMilvus:
                 description="Model used for embedding (e.g., 'openai', 'cohere', etc.)",
             ),
             FieldSchema(
-                name="vector",
+                name=vector_field_name,
                 dtype=DataType.FLOAT_VECTOR,
                 dim=dimension,
                 description="Vector of the chunk",
             ),
             FieldSchema(
                 name="meta",
-                dtype=DataType.VARCHAR,  # Or DataType.JSON if supported
-                max_length=4096,  # Adjust as needed
+                dtype=DataType.VARCHAR,
+                max_length=4096,
                 description="Extra metadata as JSON string",
             ),
         ]
@@ -502,53 +557,8 @@ class BaseMilvus:
             name=name,
             fields=fields,
             description="A collection for storing vectors of a document along with document's meta data",
-            enable_dynamic_field=True,  # <-- Enable dynamic fields here
+            enable_dynamic_field=True,
         )
-
-    @staticmethod
-    def __create_index_if_missing(
-        collection_name: str,
-        index_params: dict,
-        index_name: str,
-        milvus_client: Optional[MilvusClient] = None,
-    ) -> None:
-        """
-        Creates an index on a collection field only if it doesn't already exist.
-        """
-        try:
-            client = milvus_client or BaseMilvus.__get_internal_admin_client()
-            indexes = client.list_indexes(collection_name=collection_name)
-            # Fix: handle both dict and string
-            existing = set()
-            for idx in indexes:
-                if isinstance(idx, dict) and "index_name" in idx:
-                    existing.add(idx["index_name"])
-                elif isinstance(idx, str):
-                    existing.add(idx)
-
-            field_name = index_params["field_name"]
-
-            if index_name not in existing:
-                # Convert dict to IndexParams
-                ip = IndexParams()
-                ip.add_index(
-                    field_name=index_params["field_name"],
-                    index_type=index_params["index_type"],
-                    index_name=index_params["index_name"],
-                    metric_type=index_params["metric_type"],
-                    params=index_params["params"],
-                )
-                client.create_index(collection_name=collection_name, index_params=ip)
-                logger.debug(
-                    f"Index '{index_name}' created on '{field_name}' in '{collection_name}'."
-                )
-            else:
-                logger.debug(
-                    f"Index '{index_name}' already exists on '{collection_name}'."
-                )
-        except Exception as e:
-            logger.error(f"Failed to create index '{index_name}': {e}")
-            raise Exception(f"Failed to create index '{index_name}': {e}")
 
     @staticmethod
     def _create_vector_store_index_if_not_exists(
@@ -559,14 +569,15 @@ class BaseMilvus:
         Returns True if created, False if already exists.
         Raises Exception on error.
         """
-        index_name = "vector_index"
+        index_name = "flouds_vector_index"
+        vector_field_name = BaseMilvus._get_vector_field_name()
         try:
             with BaseMilvus.__db_switch_lock:
                 db_admin_client = BaseMilvus._get_or_create_tenant_connection(
                     tenant_code
                 )
                 index_params = {
-                    "field_name": "vector",
+                    "field_name": vector_field_name,
                     "index_type": "IVF_FLAT",
                     "metric_type": "COSINE",
                     "params": {"nlist": 1024},
@@ -858,8 +869,9 @@ class BaseMilvus:
                     logger.info(f"Collection '{collection_name}' already exists.")
 
                 # 2. Index
-                index_name = "vector_index"
+                index_name = "flouds_vector_index"
                 indexes = db_admin_client.list_indexes(collection_name=collection_name)
+                vector_field_name = BaseMilvus._get_vector_field_name()
                 existing_indexes = set()
                 for idx in indexes:
                     if isinstance(idx, dict) and "index_name" in idx:
@@ -869,7 +881,7 @@ class BaseMilvus:
                 if index_name not in existing_indexes:
                     ip = IndexParams()
                     ip.add_index(
-                        field_name="vector",
+                        field_name=vector_field_name,
                         index_type="IVF_FLAT",
                         index_name=index_name,
                         metric_type="COSINE",

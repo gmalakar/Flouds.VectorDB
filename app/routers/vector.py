@@ -39,14 +39,9 @@ async def set_vector_store(
     logger.debug(
         f"Vector store request set_vector_store for tenant: {request.tenant_code}"
     )
-    extra_fields = CommonUtils.parse_extra_fields(
-        request, SetVectorStoreRequest
-    )
+    extra_fields = CommonUtils.parse_extra_fields(request, SetVectorStoreRequest)
     response: ListResponse = await asyncio.to_thread(
-        VectorStoreService.set_vector_store,
-        request,
-        token=token,
-        **extra_fields
+        VectorStoreService.set_vector_store, request, token=token, **extra_fields
     )
     logger.debug(f"Vector store response: {response.tenant_code} - {response.success}")
     if not response.success:

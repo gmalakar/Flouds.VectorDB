@@ -29,6 +29,18 @@ class VectorDBConfig(BaseModel):
     username: str = Field(default="admin")
     password: str = Field(default="@Milvus2025Milvus#")
     default_dimension: int = Field(default=256)
+    primary_key: str = Field(
+        default="flouds_vector_id",
+        description="Primary key for the vector database. Must be unique for each vector.",
+    )
+    primary_key_type: str = Field(
+        default="VARCHAR",
+        description="Data type for the primary key in the vector database.",
+    )
+    vector_field_name: str = Field(
+        default="flouds_vector",
+        description="Field name for the vector in the vector database.",
+    )
     admin_role_name: str = Field(
         default="flouds_admin_role",
         description="Role name for the admin user in the vector database.",

@@ -26,7 +26,9 @@ class VectorStoreService:
     """
 
     @classmethod
-    def set_user(cls, request: SetUserRequest, token: str, **kwargs: Any) -> ListResponse:
+    def set_user(
+        cls, request: SetUserRequest, token: str, **kwargs: Any
+    ) -> ListResponse:
         """
         Sets a user in the vector store for the given tenant.
 
@@ -133,6 +135,10 @@ class VectorStoreService:
             response.message = (
                 f"Vector store inserted successfully. {num_inserted} vectors inserted."
             )
+        except ValueError as ve:
+            response.success = False
+            response.message = f"ValueError: {str(ve)}"
+            logger.exception("ValueError during vector store insert operation")
         except Exception as e:
             response.success = False
             response.message = f"Error in inserting vector store: {str(e)}"
