@@ -7,7 +7,6 @@
 from pydantic import Field
 
 from app.models.base_request import BaseRequest
-from app.models.embeded_vector import EmbeddedVector
 
 
 class SearchEmbeddedRequest(BaseRequest):
@@ -52,6 +51,11 @@ class SearchEmbeddedRequest(BaseRequest):
         0.8,
         ge=0.0,
         description="The minimum score threshold for results. Default is 0.8, minimum is 0.0.",
+    )
+
+    meta_required: bool = Field(
+        False,
+        description="Whether to include metadata in the search results. Default is False.",
     )
 
     metric_type: str = Field(

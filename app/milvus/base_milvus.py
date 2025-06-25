@@ -355,13 +355,12 @@ class BaseMilvus:
         Validates a Milvus token by attempting a connection.
         Returns True if valid, False otherwise.
         """
-        logger.debug(f"Validating token: {token}")
         try:
             alias = str(uuid.uuid4())  # Generate a unique alias
             connections.connect(
                 uri=BaseMilvus._get_milvus_url(), token=token, alias=alias
             )
-            logger.debug(f"Token '{token}' validated successfully.")
+            logger.debug(f"Token validated successfully.")
             connections.disconnect(alias)
             return True
         except Exception as e:
@@ -435,13 +434,13 @@ class BaseMilvus:
                         "existing_user": False,
                         "client_id": client_id,
                         "client_secret": secret_key,
-                        "message": f"User '{client_id}' created successfully.",
+                        "message": f"User created successfully.",
                     }
                 )
-                logger.debug(f"User '{client_id}' created successfully!")
+                logger.debug(f"User created successfully!")
             except Exception as ex:
-                logger.error(f"Failed to create user '{client_id}': {ex}")
-                summary["message"] = f"Failed to create user '{client_id}': {ex}"
+                logger.error(f"Failed to create user : {ex}")
+                summary["message"] = f"Failed to create user : {ex}"
         return summary
 
     @staticmethod
@@ -466,7 +465,7 @@ class BaseMilvus:
         """
         Returns a list specifying output fields for chunk and meta.
         """
-        return ["chunk", "meta"]
+        return ["chunk", "meta", "model"]
 
     @staticmethod
     def _get_primary_key_name() -> str:
@@ -538,6 +537,8 @@ class BaseMilvus:
                 name="model",
                 dtype=DataType.VARCHAR,
                 max_length=256,
+                enable_match=True,
+                enable_analyzer=True,
                 description="Model used for embedding (e.g., 'openai', 'cohere', etc.)",
             ),
             FieldSchema(
@@ -569,19 +570,20 @@ class BaseMilvus:
         Returns True if created, False if already exists.
         Raises Exception on error.
         """
-        index_name = "flouds_vector_index"
+        vector_index_name = "flouds_vector_index"
+        model_index_name = "flouds_model_index"
         vector_field_name = BaseMilvus._get_vector_field_name()
         try:
             with BaseMilvus.__db_switch_lock:
                 db_admin_client = BaseMilvus._get_or_create_tenant_connection(
                     tenant_code
                 )
-                index_params = {
+                vector_index_params = {
                     "field_name": vector_field_name,
                     "index_type": "IVF_FLAT",
                     "metric_type": "COSINE",
                     "params": {"nlist": 1024},
-                    "index_name": index_name,
+                    "index_name": vector_index_name,
                 }
                 # Check if index exists
                 indexes = db_admin_client.list_indexes(collection_name=collection_name)
@@ -592,25 +594,45 @@ class BaseMilvus:
                     elif isinstance(idx, str):
                         existing.add(idx)
 
-                if index_name not in existing:
+                if vector_index_name not in existing:
                     ip = IndexParams()
                     ip.add_index(
-                        field_name=index_params["field_name"],
-                        index_type=index_params["index_type"],
-                        index_name=index_params["index_name"],
-                        metric_type=index_params["metric_type"],
-                        params=index_params["params"],
+                        field_name=vector_index_params["field_name"],
+                        index_type=vector_index_params["index_type"],
+                        index_name=vector_index_params["index_name"],
+                        metric_type=vector_index_params["metric_type"],
+                        params=vector_index_params["params"],
                     )
                     db_admin_client.create_index(
                         collection_name=collection_name, index_params=ip
                     )
                     logger.debug(
-                        f"Index '{index_name}' created on 'vector' in '{collection_name}'."
+                        f"Index '{vector_index_name}' created on 'vector' in '{collection_name}'."
                     )
                     created = True
                 else:
                     logger.debug(
-                        f"Index '{index_name}' already exists on '{collection_name}'."
+                        f"Index '{vector_index_name}' already exists on '{collection_name}'."
+                    )
+                    created = False
+                # Create model index if it does not exist
+                if model_index_name not in existing:
+                    ip = IndexParams()
+                    ip.add_index(
+                        field_name="model",
+                        index_type="INVERTED",
+                        index_name=model_index_name,
+                    )
+                    db_admin_client.create_index(
+                        collection_name=collection_name, index_params=ip
+                    )
+                    logger.debug(
+                        f"Index '{model_index_name}' created on 'model' in '{collection_name}'."
+                    )
+                    created = True
+                else:
+                    logger.debug(
+                        f"Index '{model_index_name}' already exists on '{collection_name}'."
                     )
                     created = False
 
@@ -618,10 +640,10 @@ class BaseMilvus:
 
         except Exception as e:
             logger.error(
-                f"Cannot create index '{index_name}' for tenant '{tenant_code}': {e}"
+                f"Cannot create index '{vector_index_name}' for tenant '{tenant_code}': {e}"
             )
             raise Exception(
-                f"Failed to create index '{index_name}' for tenant '{tenant_code}': {e}"
+                f"Failed to create index '{vector_index_name}' for tenant '{tenant_code}': {e}"
             )
 
     @staticmethod
@@ -868,36 +890,35 @@ class BaseMilvus:
                 else:
                     logger.info(f"Collection '{collection_name}' already exists.")
 
-                # 2. Index
-                index_name = "flouds_vector_index"
-                indexes = db_admin_client.list_indexes(collection_name=collection_name)
-                vector_field_name = BaseMilvus._get_vector_field_name()
-                existing_indexes = set()
-                for idx in indexes:
-                    if isinstance(idx, dict) and "index_name" in idx:
-                        existing_indexes.add(idx["index_name"])
-                    elif isinstance(idx, str):
-                        existing_indexes.add(idx)
-                if index_name not in existing_indexes:
-                    ip = IndexParams()
-                    ip.add_index(
-                        field_name=vector_field_name,
-                        index_type="IVF_FLAT",
-                        index_name=index_name,
-                        metric_type="COSINE",
-                        params={"nlist": 1024},
-                    )
-                    db_admin_client.create_index(
-                        collection_name=collection_name, index_params=ip
-                    )
-                    logger.info(f"Index '{index_name}' created on '{collection_name}'.")
-                    summary["index_created"] = True
-                else:
-                    logger.info(
-                        f"Index '{index_name}' already exists on '{collection_name}'."
-                    )
+                # index_name = "flouds_vector_index"
+                # indexes = db_admin_client.list_indexes(collection_name=collection_name)
+                # vector_field_name = BaseMilvus._get_vector_field_name()
+                # existing_indexes = set()
+                # for idx in indexes:
+                #     if isinstance(idx, dict) and "index_name" in idx:
+                #         existing_indexes.add(idx["index_name"])
+                #     elif isinstance(idx, str):
+                #         existing_indexes.add(idx)
+                # if index_name not in existing_indexes:
+                #     ip = IndexParams()
+                #     ip.add_index(
+                #         field_name=vector_field_name,
+                #         index_type="IVF_FLAT",
+                #         index_name=index_name,
+                #         metric_type="COSINE",
+                #         params={"nlist": 1024},
+                #     )
+                #     db_admin_client.create_index(
+                #         collection_name=collection_name, index_params=ip
+                #     )
+                #     logger.info(f"Index '{index_name}' created on '{collection_name}'.")
+                #     summary["index_created"] = True
+                # else:
+                #     logger.info(
+                #         f"Index '{index_name}' already exists on '{collection_name}'."
+                #     )
 
-                # 3. Role
+                # 2. Role
                 roles = db_admin_client.list_roles()
                 role_names = [
                     r["role_name"] if isinstance(r, dict) else r for r in roles
@@ -909,7 +930,7 @@ class BaseMilvus:
                 else:
                     logger.info(f"Role '{role_name}' already exists.")
 
-                # 4. Privileges
+                # 3. Privileges
 
                 granted_any = False
                 for privilege in BaseMilvus.__TENANT_ROLE_PRIVILEGES:
@@ -925,7 +946,7 @@ class BaseMilvus:
                     granted_any = True
                 summary["privileges_granted"] = granted_any
 
-                # 5. Assign role to user
+                # 4. Assign role to user
                 users = db_admin_client.list_users()
                 user_names = [
                     u["user_name"] if isinstance(u, dict) else u for u in users
@@ -942,6 +963,13 @@ class BaseMilvus:
                         f"User '{client_id}' does not exist to assign role '{role_name}'."
                     )
 
+            # 5. Index
+            # Create index if it does not exist
+            created = BaseMilvus._create_vector_store_index_if_not_exists(
+                collection_name=collection_name, tenant_code=tenant_code
+            )
+            if created:
+                summary["index_created"] = True
             return summary
 
         except Exception as ex:

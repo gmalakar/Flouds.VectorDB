@@ -22,8 +22,18 @@ logger = get_logger("Vector Store")
 
 class VectorStore(BaseMilvus):
     _milvus_admin_client: Optional[MilvusClient] = None
-    # _db_name: Optional[str] = None
-    # _store_name: Optional[str] = None
+
+    # Static array of optional keys
+    OPTIONAL_SEARCH_KEYS = [
+        "partition_names",
+        "timeout",
+        "_async",
+        "_callback",
+        "consistency_level",
+        "guarantee_timestamp",
+        "graceful_time",
+        "travel_timestamp",
+    ]
 
     def __init__(
         self, tenant_code: str, user_id: str, password: str, dimension: int = 0
@@ -137,26 +147,6 @@ class VectorStore(BaseMilvus):
             logger.exception(f"Error upserting data into Milvus collection: {ex}")
             raise Exception("Error upserting data into Milvus collection") from ex
 
-    # def search_embedded_data(
-    #     self, text_to_search: str, vector: List[float], parameters: dict
-    # ) -> dict:
-    #     try:
-    #         results = self.search_store(vector, parameters)
-    #         if results:
-    #             return {
-    #                 "status": "OK",
-    #                 "results": results,
-    #                 "message": f"Found matching chunk for text '{text_to_search}'",
-    #             }
-    #         else:
-    #             return {
-    #                 "status": "no chunks found",
-    #                 "message": f"Could not find any matching chunk for text '{text_to_search}'",
-    #             }
-    #     except Exception as ex:
-    #         logger.error(f"Exception during search: {ex}")
-    #         return {"status": "Exception", "message": str(ex)}
-
     def search_store(
         self, request: SearchEmbeddedRequest, **kwargs
     ) -> List[EmbeddedMeta]:
@@ -165,67 +155,59 @@ class VectorStore(BaseMilvus):
         results: List[EmbeddedMeta] = []
         client = self._get_tenant_client()
 
-        model = request.model.lower()
-        expr = f'model == "{model}"' if model else ""
-
-        params = {}
-        for key in ["nprobe", "ef", "radius", "range_filter"]:
-            value = kwargs.get(key, getattr(request, key, None))
-            if value is not None:
-                params[key] = value
-
-        # Use the dynamic vector field name
         vector_field_name = BaseMilvus._get_vector_field_name()
+        model = request.model.lower().strip() if request.model else ""
+        filter_expr = f'model == "{model}"' if model else None
 
-        search_params = {
-            "metric_type": kwargs.get(
-                "metric_type", getattr(request, "metric_type", None)
-            ),
-            "params": params,
+        kwargs2 = {
+            "search_params": {
+                "metric_type": request.metric_type or "COSINE",
+                "params": {"nprobe": request.nprobe or 16},
+            },
+            "limit": request.limit or 10,
+            "offset": request.offset or 0,
+            "round_decimal": request.round_decimal or 6,
             "output_fields": BaseMilvus.get_chunk_meta_output_fields(),
         }
-        # Only add optional top-level keys if not None
-        for key in [
-            "limit",
-            "offset",
-            "expr",
-            "partition_names",
-            "score_threshold",
-            "timeout",
-            "round_decimal",
-            "_async",
-            "_callback",
-            "consistency_level",
-            "guarantee_timestamp",
-            "graceful_time",
-            "travel_timestamp",
-        ]:
-            value = kwargs.get(key, getattr(request, key, None))
-            if value is not None:
-                search_params[key] = value
+
+        if filter_expr:
+            kwargs2["filter"] = filter_expr
+
+        for key in ["radius", "range_filter"]:
+            if key in kwargs:
+                kwargs2["search_params"]["params"][key] = kwargs[key]
+
+        for key in self.OPTIONAL_SEARCH_KEYS:
+            if key in kwargs:
+                kwargs2[key] = kwargs[key]
 
         result = client.search(
             collection_name=self._store_name,
             data=[request.vector],
-            anns_field=vector_field_name,  # Use the custom vector field name here
-            search_params=search_params,
-            limit=search_params.get("limit"),
-            output_fields=search_params["output_fields"],
+            anns_field=vector_field_name,
+            **kwargs2,
         )
 
-        # Parse results as needed
+        results = []
         for hits in result:
             for hit in hits:
                 chunk = hit.entity.get("chunk")
                 if chunk:
                     meta = hit.entity.get("meta", "{}")
-                    if isinstance(meta, str):
-                        meta = json.loads(meta)
-                    embeded_meta = EmbeddedMeta(
+                    try:
+                        if isinstance(meta, str):
+                            meta = json.loads(meta)
+                    except json.JSONDecodeError:
+                        meta = {}
+                    # Filter out rows with null/blank meta if meta_required is True
+                    if request.meta_required and (not meta or meta == {}):
+                        continue
+                    embedded_meta = EmbeddedMeta(
                         content=chunk,
                         meta=meta,
                     )
-                    results.append(embeded_meta)
+                    results.append(embedded_meta)
+
         logger.debug(
             f"Retrieved {len(results)} results from vector store '{self._store_name}'"
         )
@@ -247,6 +229,7 @@ class VectorStore(BaseMilvus):
                     BaseMilvus._create_vector_store_index_if_not_exists(
                         self._store_name, self._tenant_code
                     )
+                    self._has_index = True
                 client.load_collection(self._store_name)
                 logger.info(f"Vector store '{self._store_name}' loaded.")
                 self._has_collection = True

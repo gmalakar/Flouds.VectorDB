@@ -4,7 +4,7 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class BaseRequest(BaseModel):
@@ -18,5 +18,6 @@ class BaseRequest(BaseModel):
         description="The tenant for which the request is made. This field is required.",
     )
 
-    class Config:
-        extra = "allow"  # This allows extra fields (i.e., **kwargs)
+    model_config = ConfigDict(extra="allow")
+
+
