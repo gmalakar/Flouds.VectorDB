@@ -188,9 +188,12 @@ class VectorStore(BaseMilvus):
             **kwargs2,
         )
 
-        results = []
+        filtered_results = []
+        score_threshold = getattr(request, "score_threshold", None)
         for hits in result:
             for hit in hits:
+                if score_threshold is not None and hit.score < score_threshold:
+                    continue
                 chunk = hit.entity.get("chunk")
                 if chunk:
                     meta = hit.entity.get("meta", "{}")
@@ -199,19 +202,18 @@ class VectorStore(BaseMilvus):
                             meta = json.loads(meta)
                     except json.JSONDecodeError:
                         meta = {}
-                    # Filter out rows with null/blank meta if meta_required is True
                     if request.meta_required and (not meta or meta == {}):
                         continue
                     embedded_meta = EmbeddedMeta(
                         content=chunk,
                         meta=meta,
                     )
-                    results.append(embedded_meta)
+                    filtered_results.append(embedded_meta)
 
         logger.debug(
-            f"Retrieved {len(results)} results from vector store '{self._store_name}'"
+            f"Retrieved {len(filtered_results)} results from vector store '{self._store_name}'"
         )
-        return results
+        return filtered_results
 
     def __set_collection(self) -> bool:
         """

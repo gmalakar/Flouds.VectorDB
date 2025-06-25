@@ -4,7 +4,7 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BaseRequest(BaseModel):
@@ -19,5 +19,3 @@ class BaseRequest(BaseModel):
     )
 
     model_config = ConfigDict(extra="allow")
-
-
