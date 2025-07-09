@@ -12,6 +12,8 @@ from app.milvus.milvus_helper import MilvusHelper
 from app.models.base_response import BaseResponse
 from app.models.insert_request import InsertEmbeddedRequest
 from app.models.list_response import ListResponse
+from app.models.reset_password_request import ResetPasswordRequest
+from app.models.reset_password_response import ResetPasswordResponse
 from app.models.search_request import SearchEmbeddedRequest
 from app.models.search_response import SearchEmbeddedResponse
 from app.models.set_user_request import SetUserRequest
@@ -61,6 +63,50 @@ class VectorStoreService:
         finally:
             elapsed: float = time.time() - start_time
             logger.debug(f"User set operation completed in {elapsed:.2f} seconds.")
+            response.time_taken = elapsed
+            return response
+
+    @classmethod
+    def reset_password(
+        cls, request: ResetPasswordRequest, token: str, **kwargs: Any
+    ) -> ResetPasswordResponse:
+        """
+        Resets a user's password in the vector store for the given tenant.
+
+        Args:
+            request (BaseRequest): The request object containing tenant and token info.
+            token (str): The token for authentication.
+            **kwargs: Any extra keyword arguments to pass to MilvusHelper.set_user.
+
+        Returns:
+            ListResponse: The response with operation details.
+        """
+        start_time: float = time.time()
+        response: ResetPasswordResponse = ResetPasswordResponse(
+            tenant_code=request.tenant_code,
+            user_name=request.user_name,  # Add this missing required field
+            success=False,
+            message="Password reset failed.",
+            time_taken=0.0,
+        )
+        try:
+            logger.debug(
+                f"Password reset request: {request.tenant_code}, kwargs: {kwargs}"
+            )
+            resp2 = MilvusHelper.reset_password(request=request, token=token, **kwargs)
+            response.message = resp2.message
+            response.root_user = resp2.root_user
+            response.success = resp2.success
+            response.reset_flag = resp2.reset_flag
+        except Exception as e:
+            response.success = False
+            response.message = f"Error resetting password: {str(e)}"
+            logger.exception("Unexpected error during password reset operation")
+        finally:
+            elapsed: float = time.time() - start_time
+            logger.debug(
+                f"Password reset operation completed in {elapsed:.2f} seconds."
+            )
             response.time_taken = elapsed
             return response
 

@@ -28,6 +28,7 @@ class VectorDBConfig(BaseModel):
     port: int = Field(default=19530)
     username: str = Field(default="admin")
     password: str = Field(default="@Milvus2025Milvus#")
+    vectordb_config_file: str = Field(default="/vectordb/config.json")
     default_dimension: int = Field(default=256)
     primary_key: str = Field(
         default="flouds_vector_id",

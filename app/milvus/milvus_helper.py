@@ -13,6 +13,8 @@ from app.milvus.base_milvus import BaseMilvus
 from app.milvus.vector_store import VectorStore
 from app.models.embeded_meta import EmbeddedMeta
 from app.models.insert_request import InsertEmbeddedRequest
+from app.models.reset_password_request import ResetPasswordRequest
+from app.models.reset_password_response import ResetPasswordResponse
 from app.models.search_request import SearchEmbeddedRequest
 from app.models.set_user_request import SetUserRequest
 from app.modules.concurrent_dict import ConcurrentDict
@@ -108,6 +110,30 @@ class MilvusHelper(BaseMilvus):
             tenant_code=request.tenant_code,
             reset_user=request.reset_user,
             token=token,
+            **kwargs,
+        )
+
+    @staticmethod
+    def reset_password(
+        request: ResetPasswordRequest, token: str, **kwargs: Any
+    ) -> ResetPasswordResponse:
+        """
+        Resets the password for a user in a tenant.
+        Uses a lock to ensure thread safety.
+        """
+        client_id, secret_key = MilvusHelper._split_token(token)
+        logger.debug(f"Setting up user for tenant '{request.tenant_code}'")
+        valid_token = BaseMilvus._validate_token(token=token)
+        if not valid_token:
+            logger.error(f"Invalid token: {token}")
+            raise ValueError("Invalid token.")
+        super_user = BaseMilvus._is_super_user(user_id=client_id)
+        if not super_user:
+            logger.error(f"User '{client_id}' is not a super user.")
+            raise PermissionError("User is not a super user to perform this operation.")
+
+        return BaseMilvus._reset_admin_user_password(
+            request=request,
             **kwargs,
         )
 

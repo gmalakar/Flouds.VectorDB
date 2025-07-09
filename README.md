@@ -284,7 +284,7 @@ If you want to persist logs or other data outside the container:
 
 ```sh
 docker run -p 19680:19680 \
-  -v $(pwd)/logs:/flouds-py/logs \
+  -v $(pwd)/logs:/flouds-vector/logs \
   -e FLOUDS_API_ENV=Production \
   -e VECTORDB_USERNAME=admin \
   -e VECTORDB_PASSWORD=yourpassword \

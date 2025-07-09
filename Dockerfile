@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1 \
     FLOUDS_API_ENV=Production \
     FLOUDS_DEBUG_MODE=0
 
-WORKDIR /flouds-py
+WORKDIR /flouds-vector
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y build-essential \
@@ -26,7 +26,7 @@ RUN rm -rf /root/.cache/*
 
 EXPOSE 19680
 
-ENV FLOUDS_ONNX_ROOT=/flouds-py/onnx
+ENV FLOUDS_ONNX_ROOT=/flouds-ai/onnx
 RUN mkdir -p $FLOUDS_ONNX_ROOT
 
 RUN find / -type f -size +10M -exec du -h {} + | sort -hr > /large_files.log || true
