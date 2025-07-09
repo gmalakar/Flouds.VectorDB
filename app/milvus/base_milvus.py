@@ -78,14 +78,6 @@ class BaseMilvus:
         BaseMilvus.initialize()
         self._lock: Lock = Lock()
 
-    @staticmethod
-    def __get_uri(host: str, port: int) -> str:
-        """
-        Concatenates host and port to return a URI string.
-        Example: host='milvus-standalone', port=19530 -> 'milvus-standalone:19530'
-        """
-        return f"{host}:{port}"
-
     @classmethod
     def initialize(cls) -> None:
         """
@@ -93,140 +85,134 @@ class BaseMilvus:
         """
         with cls.__init_lock:
             if not cls.__initialized:
-                # Try to read credentials from JSON file first
-                username = None
-                password = None
-                endpoint = None
-                port = None
-                config_file = APP_SETTINGS.vectordb.vectordb_config_file
+                # Read username from environment or settings
+                username = (
+                    os.getenv("VECTORDB_USERNAME") or APP_SETTINGS.vectordb.username
+                )
+                if not username or username.strip() == "":
+                    raise ValueError(
+                        "vectordb.username is missing! Set VECTORDB_USERNAME env or in your config."
+                    )
 
-                if config_file and os.path.exists(config_file):
+                # Try to read password from plain text file
+                password = None
+                password_file = APP_SETTINGS.vectordb.password_file
+
+                if password_file and os.path.exists(password_file):
                     try:
                         logger.debug(
-                            f"Attempting to read credentials from file: {config_file}"
+                            f"Attempting to read password from file: {password_file}"
                         )
-                        with open(config_file, "r") as file:
-                            credential_data = json.loads(file.read())
-                            if isinstance(credential_data, dict):
-                                username = credential_data.get("uid")
-                                password = credential_data.get("pwd")
-                                endpoint = credential_data.get("endpoint")
-                                port = credential_data.get("port")
-
-                                if username and password:
-                                    logger.debug(
-                                        "Username and password successfully read from JSON file"
-                                    )
-                                else:
-                                    logger.warning(
-                                        f"JSON file {config_file} is missing uid or pwd fields"
-                                    )
-
-                                if endpoint:
-                                    logger.debug(
-                                        f"Endpoint '{endpoint}' read from JSON file"
-                                    )
-                                if port:
-                                    logger.debug(f"Port '{port}' read from JSON file")
+                        with open(password_file, "r") as file:
+                            password = file.read().strip()
+                            if password:
+                                logger.debug("Password successfully read from file")
                             else:
                                 logger.warning(
-                                    f"JSON file {config_file} does not contain a valid dictionary"
+                                    f"Password file {password_file} is empty"
                                 )
-                    except json.JSONDecodeError:
-                        logger.warning(f"Failed to parse {config_file} as JSON")
                     except Exception as e:
                         logger.warning(
-                            f"Failed to read credentials file {config_file}: {e}"
+                            f"Failed to read password file {password_file}: {e}"
                         )
 
-                # Fall back to environment variables or settings if needed
-                if not username:
-                    username = (
-                        os.getenv("VECTORDB_USERNAME") or APP_SETTINGS.vectordb.username
-                    )
-                    if not username or username.strip() == "":
-                        raise ValueError(
-                            "vectordb.username is missing! Set VECTORDB_USERNAME env or in your config."
-                        )
-
+                # If no password from file, try environment variable or settings
                 if not password:
                     password = (
                         os.getenv("VECTORDB_PASSWORD") or APP_SETTINGS.vectordb.password
                     )
-                    if not password or password.strip() == "":
-                        raise ValueError(
-                            "Milvus password is missing! Set VECTORDB_PASSWORD env var, provide a valid credential file, or set it in your config."
-                        )
+
+                if not password or password.strip() == "":
+                    raise ValueError(
+                        "Milvus password is missing! Set VECTORDB_PASSWORD env var, provide a valid password file, or set it in your config."
+                    )
 
                 cls.__milvus_admin_username = username
                 cls.__milvus_admin_password = password
 
                 logger.info(f"Using Milvus username: {cls.__milvus_admin_username}")
 
-                # Validate and set endpoint and port - use credential file values first
-                if not endpoint:
-                    endpoint = (
-                        os.getenv("VECTORDB_ENDPOINT") or APP_SETTINGS.vectordb.endpoint
-                    )
-
-            # If running in Docker and endpoint does not start with protocol, add protocol
-            if not re.match(r"^https?://", endpoint):
-                endpoint = f"http://{endpoint}"
-            if (
-                endpoint
-                and isinstance(endpoint, str)
-                and re.match(r"^https?://|^[\w\.-]+$", endpoint)
-            ):
-                cls.__milvus_endpoint = endpoint
-            else:
-                raise ValueError(
-                    "vectordb.endpoint is invalid! Must be a valid URL or hostname. Set VECTORDB_ENDPOINT env or in your config."
+                # Get endpoint from environment or settings
+                endpoint = (
+                    os.getenv("VECTORDB_ENDPOINT") or APP_SETTINGS.vectordb.endpoint
                 )
 
-            # Process port - use credential file value first, then env var, then settings
-            if port is None:
-                port = os.getenv("VECTORDB_PORT") or APP_SETTINGS.vectordb.port
-
-            try:
-                port = int(port)
-            except Exception:
-                port = 19530
-
-            if port and port > 0:
-                cls.__milvus_port = port
-                logger.debug(f"Using Milvus port: {cls.__milvus_port}")
-            else:
-                logger.warning("vectordb.port is invalid! Using default port 19530.")
-
-            # Rest of the initialization...
-            cls.__admin_role_name = APP_SETTINGS.vectordb.admin_role_name
-            logger.info(f"Using Milvus admin role name: {cls.__admin_role_name}")
-
-            logger.info(f"Using Milvus endpoint: {cls.__milvus_endpoint}")
-            # create internal client
-            cls.__minvus_admin_client = MilvusClient(
-                uri=cls._get_milvus_url(),
-                user=cls.__milvus_admin_username,
-                password=cls.__milvus_admin_password,
-            )
-            try:
-                # HINT: Try a simple operation to verify connection
-                if not cls.check_connection(cls.__minvus_admin_client):
-                    logger.error("Milvus connection failed!")
-                    raise ConnectionError(
-                        "Failed to connect to Milvus. Please check your configuration."
+                # Fix Docker hostname issues when running locally
+                if endpoint == "milvus-standalone" and not os.getenv(
+                    "VECTORDB_ENDPOINT"
+                ):
+                    # If running locally and using default Docker hostname, switch to localhost
+                    endpoint = "localhost"
+                    logger.info(
+                        "Running locally: switched endpoint from 'milvus-standalone' to 'localhost'"
                     )
-            except Exception as ex:
-                logger.error(f"Failed to connect to Milvus: {ex}")
-                raise ConnectionError(f"Failed to connect to Milvus: {ex}")
-            cls.__initialized = True
 
-    @staticmethod
-    def _get_milvus_url() -> str:
-        """
-        Returns the Milvus server URL using the configured endpoint and port.
-        """
-        return f"{BaseMilvus.__milvus_endpoint}:{BaseMilvus.__milvus_port}"
+                # If running in Docker and endpoint does not start with protocol, add protocol
+                if not re.match(r"^https?://", endpoint):
+                    endpoint = f"http://{endpoint}"
+                if (
+                    endpoint
+                    and isinstance(endpoint, str)
+                    and re.match(r"^https?://|^[\w\.-]+$", endpoint)
+                ):
+                    cls.__milvus_endpoint = endpoint
+                else:
+                    raise ValueError(
+                        "vectordb.endpoint is invalid! Must be a valid URL or hostname."
+                    )
+
+                # Get port from environment or settings
+                try:
+                    port = int(os.getenv("VECTORDB_PORT") or APP_SETTINGS.vectordb.port)
+                except Exception:
+                    port = 19530
+
+                if port and port > 0:
+                    cls.__milvus_port = port
+                    logger.debug(f"Using Milvus port: {cls.__milvus_port}")
+                else:
+                    logger.warning(
+                        "vectordb.port is invalid! Using default port 19530."
+                    )
+
+                # Rest of the initialization...
+                cls.__admin_role_name = APP_SETTINGS.vectordb.admin_role_name
+                logger.info(f"Using Milvus admin role name: {cls.__admin_role_name}")
+                milvus_url = cls._get_milvus_url()
+                logger.info(f"Using Milvus endpoint: {milvus_url}")
+                logger.info(f"Using Milvus port: {cls.__milvus_port}")
+                logger.info(
+                    f"Using Milvus admin username: {cls.__milvus_admin_username}"
+                )
+
+                # Create internal client properly
+                cls.__minvus_admin_client = MilvusClient(
+                    uri=milvus_url,
+                    user=cls.__milvus_admin_username,
+                    password=cls.__milvus_admin_password,
+                )
+                try:
+                    # HINT: Try a simple operation to verify connection
+                    if not cls.check_connection(cls.__minvus_admin_client):
+                        logger.error("Milvus connection failed!")
+                        raise ConnectionError(
+                            "Failed to connect to Milvus. Please check your configuration."
+                        )
+                except Exception as ex:
+                    logger.error(f"Failed to connect to Milvus: {ex}")
+                    raise ConnectionError(f"Failed to connect to Milvus: {ex}")
+                cls.__initialized = True
+
+    @classmethod
+    def _get_milvus_url(cls) -> str:
+        """Gets the complete Milvus URL including port"""
+        endpoint = cls.__milvus_endpoint
+        # Remove trailing slash if present
+        endpoint = endpoint.rstrip("/")
+        # Don't add port if it's already in the URL
+        if f":{cls.__milvus_port}" not in endpoint:
+            return f"{endpoint}:{cls.__milvus_port}"
+        return endpoint
 
     @staticmethod
     def __assign_role_to_user(user_name: str, role_name: str) -> None:
@@ -512,67 +498,29 @@ class BaseMilvus:
     def __set_admin_password(new_password: str) -> None:
         """
         Updates the admin password in multiple storage locations:
-        1. Password file (if configured and writable) in JSON format {"uid": "username", "pwd": "password", "endpoint": "host", "port": port}
+        1. Password file (if configured and writable) as plain text
         2. Environment variable (as a temporary update)
         3. BaseMilvus.__milvus_admin_password class variable
 
         Args:
             new_password: The new admin password to store
         """
-        # Try to write to credential file if configured
-        config_file = APP_SETTINGS.vectordb.vectordb_config_file
-        if config_file:
-            # Initialize credential data with default values
-            credential_data = {
-                "uid": BaseMilvus.__milvus_admin_username,
-                "pwd": new_password,
-                "endpoint": BaseMilvus.__milvus_endpoint,
-                "port": BaseMilvus.__milvus_port,
-            }
-
+        # Try to write to password file if configured
+        password_file = APP_SETTINGS.vectordb.password_file
+        if password_file:
             try:
-                # If file exists, read and update the existing data
-                if os.path.exists(config_file):
-                    try:
-                        with open(config_file, "r") as file:
-                            existing_data = json.loads(file.read())
-                            if isinstance(existing_data, dict):
-                                # Update existing data, preserving all properties
-                                existing_data["pwd"] = new_password
-
-                                # Add uid if not present
-                                if "uid" not in existing_data:
-                                    existing_data["uid"] = (
-                                        BaseMilvus.__milvus_admin_username
-                                    )
-
-                                # Add endpoint and port if not present
-                                if "endpoint" not in existing_data:
-                                    existing_data["endpoint"] = (
-                                        BaseMilvus.__milvus_endpoint
-                                    )
-                                if "port" not in existing_data:
-                                    existing_data["port"] = BaseMilvus.__milvus_port
-
-                                # Use the merged data
-                                credential_data = existing_data
-                    except (json.JSONDecodeError, IOError) as e:
-                        logger.warning(
-                            f"Failed to parse existing credential file: {e}. Creating new file."
-                        )
-
                 # Ensure directory exists
-                os.makedirs(os.path.dirname(config_file), exist_ok=True)
+                os.makedirs(os.path.dirname(password_file), exist_ok=True)
 
-                # Write updated JSON to file
-                with open(config_file, "w") as f:
-                    json.dump(credential_data, f, indent=2)
+                # Write password as plain text to file
+                with open(password_file, "w") as f:
+                    f.write(new_password)
 
                 logger.debug(
-                    f"Admin password updated in credential file: {config_file}"
+                    f"Admin password updated in password file: {password_file}"
                 )
             except Exception as e:
-                logger.warning(f"Failed to update credential file {config_file}: {e}")
+                logger.warning(f"Failed to update password file {password_file}: {e}")
 
         # Try to update environment variable
         try:

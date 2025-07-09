@@ -85,3 +85,7 @@ def run_server():
 
 if __name__ == "__main__":
     run_server()
+
+# Run Instruction
+# Unit Test : python -m pytest
+# Run for terminal: python -m app.main

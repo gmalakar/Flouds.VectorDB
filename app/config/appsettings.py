@@ -28,7 +28,7 @@ class VectorDBConfig(BaseModel):
     port: int = Field(default=19530)
     username: str = Field(default="admin")
     password: str = Field(default="@Milvus2025Milvus#")
-    vectordb_config_file: str = Field(default="/vectordb/config.json")
+    password_file: str = Field(default="/app/secrets/password.txt")
     default_dimension: int = Field(default=256)
     primary_key: str = Field(
         default="flouds_vector_id",
@@ -48,13 +48,7 @@ class VectorDBConfig(BaseModel):
     )
 
 
-class LoggingConfig(BaseModel):
-    folder: str = Field(default="logs")
-    app_log_file: str = Field(default="flouds.log")
-
-
 class AppSettings(BaseModel):
     app: AppConfig = Field(default_factory=AppConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
-    logging: LoggingConfig = Field(default_factory=LoggingConfig)
     vectordb: VectorDBConfig = Field(default_factory=VectorDBConfig)
