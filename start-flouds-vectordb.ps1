@@ -1,3 +1,23 @@
+# =============================================================================
+# File: start-flouds-vectordb.ps1
+# Date: 2024-06-10
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+#
+# This script sets up and runs the Flouds Vector container with proper volume mapping,
+# environment variable handling, and network connections to Milvus.
+#
+# Usage:
+#   ./start-flouds-vectordb.ps1 [-EnvFile <path>] [-InstanceName <name>] [-ImageName <name>] [-Force] [-BuildImage]
+#
+# Parameters:
+#   -EnvFile       : Path to .env file (default: ".env")
+#   -InstanceName  : Name of the Docker container (default: "floudsvector-instance")
+#   -ImageName     : Docker image to use (default: "gmalakar/flouds-vector:latest")
+#   -Force         : Force restart container if it exists, or continue when Milvus is down
+#   -BuildImage    : Build Docker image locally before starting container
+# =============================================================================
+
 param (
     [string]$EnvFile = ".env",
     [string]$InstanceName = "floudsvector-instance",
@@ -6,32 +26,45 @@ param (
     [switch]$BuildImage = $false
 )
 
-Write-Host "========================================================="
-Write-Host "Starting Flouds Vector Service"
-Write-Host "========================================================="
+# ========================== HELPER FUNCTIONS ==========================
 
-# Function to ensure network exists
+function Write-StepHeader {
+    param ([string]$Message)
+    Write-Host "`n== $Message ==" -ForegroundColor Cyan
+}
+
+function Write-Success {
+    param ([string]$Message)
+    Write-Host "✅ $Message" -ForegroundColor Green
+}
+
+function Write-Warning {
+    param ([string]$Message)
+    Write-Host "⚠️ $Message" -ForegroundColor Yellow
+}
+
+function Write-Error {
+    param ([string]$Message)
+    Write-Host "❌ $Message" -ForegroundColor Red
+}
+
 function Ensure-Network {
-    param (
-        [Parameter(Mandatory=$true)]
-        [string]$Name
-    )
+    param ([string]$Name)
     
     if (-not (docker network ls --format '{{.Name}}' | Where-Object { $_ -eq $Name })) {
-        Write-Host "🔧 Creating network: $Name"
+        Write-Host "🔧 Creating network: $Name" -ForegroundColor Yellow
         docker network create $Name | Out-Null
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "✅ Network $Name created successfully"
+            Write-Success "Network $Name created successfully"
         } else {
-            Write-Error "❌ Failed to create network: $Name"
+            Write-Error "Failed to create network: $Name"
             exit 1
         }
     } else {
-        Write-Host "✅ Network $Name already exists"
+        Write-Success "Network $Name already exists"
     }
 }
 
-# Function to attach a container to a network if not already connected
 function Attach-NetworkIfNotConnected {
     param (
         [Parameter(Mandatory=$true)]
@@ -44,7 +77,7 @@ function Attach-NetworkIfNotConnected {
     # Check if container is running
     $containerRunning = docker ps --format '{{.Names}}' | Where-Object { $_ -eq $Container }
     if (-not $containerRunning) {
-        Write-Warning "⚠️ Container $Container is not running. Skipping network attachment."
+        Write-Warning "Container $Container is not running. Skipping network attachment."
         return
     }
     
@@ -53,26 +86,22 @@ function Attach-NetworkIfNotConnected {
     
     # Check if container is already connected to the network
     if ($networks -notmatch "\b$Network\b") {
-        Write-Host "🔗 Attaching network $Network to container $Container"
+        Write-Host "🔗 Attaching network $Network to container $Container" -ForegroundColor Yellow
         docker network connect $Network $Container 2>$null
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "✅ Successfully connected $Container to $Network"
+            Write-Success "Successfully connected $Container to $Network"
         } else {
-            Write-Warning "⚠️ Failed to connect $Container to $Network"
+            Write-Warning "Failed to connect $Container to $Network"
         }
     } else {
-        Write-Host "✅ Container $Container is already connected to $Network"
+        Write-Success "Container $Container is already connected to $Network"
     }
 }
 
-# Function to read environment variables from .env file
 function Read-EnvFile {
-    param (
-        [string]$FilePath
-    )
+    param ([string]$FilePath)
     
     $envVars = @{}
-    
     if (Test-Path $FilePath) {
         Get-Content $FilePath | ForEach-Object {
             if ($_ -match '^([^=]+)=(.*)$') {
@@ -85,110 +114,152 @@ function Read-EnvFile {
             }
         }
     }
-    
     return $envVars
 }
 
-# Check if .env file exists
-if (-not (Test-Path $EnvFile)) {
-    Write-Warning "⚠️ $EnvFile not found. Make sure environment variables are properly set."
-}
-else {
-    Write-Host "✅ Using environment file: $EnvFile"
-    
-    # Convert .env to Unix line endings
-    Write-Host "🔧 Converting $EnvFile to Unix (LF) format..."
-    (Get-Content $EnvFile) -join "`n" | Set-Content $EnvFile -NoNewline
-    Write-Host "✅ $EnvFile converted to Unix format"
-    
-    # Read variables from .env file
-    $envVars = Read-EnvFile -FilePath $EnvFile
-    
-    # Check password file
-    if ($envVars.ContainsKey("VECTORDB_PASSWORD_FILE")) {
-        $passwordFile = $envVars["VECTORDB_PASSWORD_FILE"]
-        
-        if (Test-Path $passwordFile) {
-            Write-Host "🔧 Converting password file to Unix (LF) format: $passwordFile"
-            (Get-Content $passwordFile) -join "`n" | Set-Content $passwordFile -NoNewline
-            Write-Host "✅ Password file converted to Unix format"
+function Check-Docker {
+    try {
+        $process = Start-Process -FilePath "docker" -ArgumentList "version" -NoNewWindow -Wait -PassThru -RedirectStandardError "NUL"
+        if ($process.ExitCode -ne 0) {
+            Write-Error "Docker is not running or not accessible. Please start Docker and try again."
+            exit 1
         }
-        else {
-            Write-Warning "⚠️ Password file not found: $passwordFile"
-        }
-    }
-    
-    # Set default values if not defined
-    if (-not $envVars.ContainsKey("VECTORDB_NETWORK")) {
-        $envVars["VECTORDB_NETWORK"] = "milvus_network"
-    }
-    
-    if (-not $envVars.ContainsKey("VECTORDB_ENDPOINT")) {
-        $envVars["VECTORDB_ENDPOINT"] = "milvus-standalone"
+        Write-Success "Docker is running"
+        return $true
+    } catch {
+        Write-Error "Docker command failed: $_"
+        exit 1
     }
 }
 
-# Check if Docker is running
-try {
-    $process = Start-Process -FilePath "docker" -ArgumentList "version" -NoNewWindow -Wait -PassThru -RedirectStandardError "NUL"
+# ========================== MAIN SCRIPT ==========================
+
+Write-Host "========================================================="
+Write-Host "                FLOUDS VECTOR STARTER SCRIPT             " -ForegroundColor Cyan
+Write-Host "========================================================="
+Write-Host "Instance Name : $InstanceName"
+Write-Host "Image         : $ImageName"
+Write-Host "Environment   : $EnvFile"
+Write-Host "Build Image   : $BuildImage"
+Write-Host "Force Restart : $Force"
+Write-Host "========================================================="
+
+# Check if Docker is available
+Write-StepHeader "Checking Docker installation"
+Check-Docker
+
+# Read environment variables
+Write-StepHeader "Reading environment configuration"
+if (-not (Test-Path $EnvFile)) {
+    Write-Warning "$EnvFile not found. Using default values."
+} else {
+    Write-Success "Using environment file: $EnvFile"
     
-    if ($process.ExitCode -ne 0) {
-        Write-Error "❌ ERROR: Docker is not running or not accessible. Please start Docker and try again."
-        exit 1
+    # Convert .env to Unix line endings to avoid issues
+    Write-Host "Converting $EnvFile to Unix (LF) format..." -ForegroundColor Yellow
+    (Get-Content $EnvFile) -join "`n" | Set-Content $EnvFile -NoNewline
+    Write-Success "$EnvFile converted to Unix format"
+}
+
+$envVars = Read-EnvFile -FilePath $EnvFile
+
+# Handle vector-specific files and settings
+if ($envVars.ContainsKey("VECTORDB_PASSWORD_FILE")) {
+    $passwordFile = $envVars["VECTORDB_PASSWORD_FILE"]
+    
+    if (Test-Path $passwordFile) {
+        Write-Host "Converting password file to Unix format: $passwordFile" -ForegroundColor Yellow
+        (Get-Content $passwordFile) -join "`n" | Set-Content $passwordFile -NoNewline
+        Write-Success "Password file converted to Unix format"
+    } else {
+        Write-Warning "Password file not found: $passwordFile"
     }
-    
-    Write-Host "✅ Docker is running"
-} 
-catch {
-    Write-Error "❌ ERROR: Docker command failed: $_"
-    exit 1
+}
+
+# Set defaults for required variables
+if (-not $envVars.ContainsKey("VECTORDB_NETWORK")) {
+    $envVars["VECTORDB_NETWORK"] = "milvus_network"
+    Write-Warning "VECTORDB_NETWORK not set. Using default: 'milvus_network'"
+}
+
+if (-not $envVars.ContainsKey("VECTORDB_ENDPOINT")) {
+    $envVars["VECTORDB_ENDPOINT"] = "milvus-standalone"
+    Write-Warning "VECTORDB_ENDPOINT not set. Using default: 'milvus-standalone'"
+}
+
+# Check log path and create if needed
+if ($envVars.ContainsKey("VECTORDB_LOG_PATH")) {
+    $logPath = $envVars["VECTORDB_LOG_PATH"]
+    if (-not (Test-Path $logPath)) {
+        Write-Warning "Log directory does not exist: $logPath"
+        Write-Host "Creating directory..." -ForegroundColor Yellow
+        try {
+            New-Item -ItemType Directory -Path $logPath -Force | Out-Null
+            Write-Success "Log directory created: $logPath"
+        } catch {
+            Write-Error "Failed to create log directory: $_"
+            exit 1
+        }
+    } else {
+        Write-Success "Found log directory: $logPath"
+    }
+} else {
+    Write-Warning "VECTORDB_LOG_PATH not set. Container logs will not be persisted to host."
 }
 
 # Build image if requested
 if ($BuildImage) {
-    Write-Host "🔨 Building Docker image..."
+    Write-StepHeader "Building Docker image"
+    Write-Host "Building $ImageName..." -ForegroundColor Yellow
     docker build -t $ImageName .
     
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "❌ ERROR: Failed to build Docker image."
+        Write-Error "Failed to build Docker image."
         exit 1
     }
     
-    Write-Host "✅ Docker image built successfully: $ImageName"
+    Write-Success "Docker image built successfully: $ImageName"
 }
 
 # Stop and remove existing container if it exists
+Write-StepHeader "Managing container instance"
 $containerExists = docker ps -a --format '{{.Names}}' | Where-Object { $_ -eq $InstanceName }
 if ($containerExists) {
-    Write-Host "🛑 Stopping and removing existing container: $InstanceName"
+    Write-Warning "Container $InstanceName already exists"
+    Write-Host "Stopping and removing existing container: $InstanceName" -ForegroundColor Yellow
     docker stop $InstanceName | Out-Null
     docker rm $InstanceName | Out-Null
+    Write-Success "Container removed"
 }
 
-# Get Milvus container name from env file or default
+# Check if Milvus is running
+Write-StepHeader "Checking Milvus connectivity"
 $milvusContainerName = $envVars["VECTORDB_ENDPOINT"]
 if (-not (docker ps --format '{{.Names}}' | Where-Object { $_ -eq $milvusContainerName })) {
-    Write-Warning "⚠️ Milvus container '$milvusContainerName' is not running. Vector service may fail to connect."
+    Write-Warning "Milvus container '$milvusContainerName' is not running. Vector service may fail to connect."
     
     if (-not $Force) {
         $confirmation = Read-Host "Continue anyway? (y/n)"
         if ($confirmation -ne 'y') {
-            Write-Host "Aborted by user."
+            Write-Host "Aborted by user." -ForegroundColor Red
             exit 0
         }
     }
+} else {
+    Write-Success "Milvus container '$milvusContainerName' is running"
 }
 
 # Define networks with clear names
+Write-StepHeader "Creating Docker networks"
 $floudsVectorNetwork = "flouds_vector_network"
 $milvusNetwork = $envVars["VECTORDB_NETWORK"]
 
-# Ensure networks exist - create them first before any container operations
-Write-Host "Creating necessary Docker networks..."
+# Ensure networks exist
 Ensure-Network -Name $floudsVectorNetwork
 Ensure-Network -Name $milvusNetwork
 
-# Build Docker command as an array of arguments
+# Build Docker command
+Write-StepHeader "Preparing container configuration"
 $dockerArgs = @(
     "run", "-d", 
     "--name", $InstanceName, 
@@ -198,70 +269,87 @@ $dockerArgs = @(
     "-e", "FLOUDS_DEBUG_MODE=0"
 )
 
-# Add environment variables
+# Add Vector-specific environment variables
 foreach ($key in @("VECTORDB_ENDPOINT", "VECTORDB_PORT", "VECTORDB_USERNAME", "VECTORDB_NETWORK")) {
     if ($envVars.ContainsKey($key)) {
+        Write-Host "Setting $key: $($envVars[$key])" -ForegroundColor Gray
         $dockerArgs += "-e" 
         $dockerArgs += "$key=$($envVars[$key])"
     }
 }
 
-# Add volume mounts
-if ($envVars.ContainsKey("VECTORDB_LOG_PATH")) {
-    $logPath = $envVars["VECTORDB_LOG_PATH"]
-    $dockerArgs += "-v"
-    $dockerArgs += "${logPath}:/var/log/flouds:rw" 
-}
-
+# Add password file if specified
 if ($envVars.ContainsKey("VECTORDB_PASSWORD_FILE")) {
     $passwordFile = $envVars["VECTORDB_PASSWORD_FILE"]
+    Write-Host "Mounting password file: $passwordFile → /app/secrets/password.txt" -ForegroundColor Gray
     $dockerArgs += "-v"
-    $dockerArgs += "${passwordFile}:/app/secrets/password.txt:rw"
+    $dockerArgs += "${passwordFile}:/app/secrets/password.txt:ro"
     $dockerArgs += "-e"
     $dockerArgs += "VECTORDB_PASSWORD_FILE=/app/secrets/password.txt"
+}
+
+# Add log directory if specified
+if ($envVars.ContainsKey("VECTORDB_LOG_PATH")) {
+    $hostLogPath = $envVars["VECTORDB_LOG_PATH"]
+    $containerLogPath = $envVars.ContainsKey("FLOUDS_LOG_PATH") ? $envVars["FLOUDS_LOG_PATH"] : "/var/log/flouds"
+    Write-Host "Mounting logs: $hostLogPath → $containerLogPath" -ForegroundColor Gray
+    $dockerArgs += "-v"
+    $dockerArgs += "${hostLogPath}:${containerLogPath}:rw"
+    $dockerArgs += "-e"
+    $dockerArgs += "FLOUDS_LOG_PATH=${containerLogPath}"
 }
 
 # Add image name
 $dockerArgs += $ImageName
 
 # Start the container
-Write-Host "🚀 Starting Flouds Vector container..."
-Write-Host "Command: docker $($dockerArgs -join ' ')"
+Write-StepHeader "Starting Flouds Vector container"
+Write-Host "Command: docker $($dockerArgs -join ' ')" -ForegroundColor Gray
 
 try {
     & docker $dockerArgs
     
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "✅ Flouds Vector container started successfully."
+        Write-Success "Flouds Vector container started successfully"
         
-        # Wait a moment for the container to fully initialize
-        Write-Host "Waiting for container to initialize..."
+        # Wait for container to initialize
+        Write-Host "Waiting for container to initialize..." -ForegroundColor Yellow
         Start-Sleep -Seconds 5
         
         # Connect to the Milvus network after starting
-        Write-Host "Connecting to Milvus network..."
+        Write-Host "Connecting container to Milvus network..." -ForegroundColor Yellow
         Attach-NetworkIfNotConnected -Container $InstanceName -Network $milvusNetwork
         
-        # Make sure Milvus container is connected to our network
+        # Connect Milvus to our network if it's running
         if (docker ps --format '{{.Names}}' | Where-Object { $_ -eq $milvusContainerName }) {
-            Write-Host "Connecting Milvus container to our network..."
+            Write-Host "Connecting Milvus to Flouds Vector network..." -ForegroundColor Yellow
             Attach-NetworkIfNotConnected -Container $milvusContainerName -Network $floudsVectorNetwork
         }
         
-        Write-Host "✅ API available at: http://localhost:19680/docs"
-        Write-Host "✅ Network connections established"
+        # Show container status
+        Write-StepHeader "Container Status"
+        docker ps --filter "name=$InstanceName" --format "table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+        
+        Write-Success "API available at: http://localhost:19680/docs"
     } else {
-        Write-Error "❌ Failed to start Flouds Vector container."
+        Write-Error "Failed to start Flouds Vector container."
         exit 1
     }
 }
 catch {
-    Write-Error "❌ Error starting Flouds Vector container: $_"
+    Write-Error "Error starting Flouds Vector container: $_"
     exit 1
 }
 
-# Show logs - optional
-$showLogs = Read-Host "Show container logs? (y/n)"
-if ($showLogs -eq "y") {
+# Show management options
+Write-StepHeader "Container Management"
+Write-Host "Use the following commands to manage the container:" -ForegroundColor Cyan
+Write-Host "  * View logs: docker logs -f $InstanceName" -ForegroundColor Gray
+Write-Host "  * Stop container: docker stop $InstanceName" -ForegroundColor Gray
+Write-Host "  * Remove container: docker rm $InstanceName" -ForegroundColor Gray
+Write-Host ""
+
+$showLogs = Read-Host "Would you like to view container logs now? (y/n)"
+if ($showLogs -eq "y" -or $showLogs -eq "Y") {
     docker logs -f $InstanceName
 }

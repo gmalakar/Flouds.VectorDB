@@ -9,8 +9,10 @@ import os
 from logging.handlers import RotatingFileHandler
 
 
-def get_logger(name: str = "flouds") -> logging.Logger:
-    log_dir = "/var/log/flouds"
+def get_logger(
+    name: str = "flouds"
+) -> logging.Logger:
+    log_dir = os.getenv("FLOUDS_LOG_PATH", "/var/log/flouds")
     log_file = "flouds-vectordb.log"
     max_bytes = 10485760
     backup_count = 5
@@ -27,7 +29,8 @@ def get_logger(name: str = "flouds") -> logging.Logger:
     )
     logger.setLevel(level)
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        "%Y-%m-%d %H:%M:%S"
     )
 
     # Console handler

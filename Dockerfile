@@ -26,8 +26,13 @@ RUN apt-get purge -y build-essential && apt-get autoremove -y
 COPY app ./app
 
 # Create required directories
-RUN mkdir -p /var/log/flouds /app/secrets
+RUN mkdir -p /app/secrets
 
+# Create log directory 
+ENV FLOUDS_LOG_PATH=/var/log/flouds
+RUN mkdir -p $FLOUDS_LOG_PATH && \
+    chmod 777 $FLOUDS_LOG_PATH
+    
 # Remove Python cache
 RUN rm -rf /root/.cache/*
 
