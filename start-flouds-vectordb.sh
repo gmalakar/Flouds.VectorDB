@@ -120,7 +120,7 @@ fi
 
 # Add log directory if specified
 if [[ -n "$VECTORDB_LOG_PATH" ]]; then
-    containerLogPath="${FLOUDS_LOG_PATH:-/var/log/flouds}"
+    containerLogPath="${FLOUDS_LOG_PATH:-/var/logs/flouds}"
     echo "Mounting logs: $VECTORDB_LOG_PATH → $containerLogPath"
     DOCKER_ARGS+=(-v "$VECTORDB_LOG_PATH:$containerLogPath:rw")
     DOCKER_ARGS+=(-e "FLOUDS_LOG_PATH=$containerLogPath")

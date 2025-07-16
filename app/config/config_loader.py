@@ -14,6 +14,7 @@ logger = get_logger("config_loader")
 
 
 class ConfigLoader:
+    __appsettings = None
 
     @staticmethod
     def get_app_settings() -> AppSettings:
@@ -22,14 +23,18 @@ class ConfigLoader:
         Performs a deep merge for nested config sections.
         """
         data = ConfigLoader._load_config_data("appsettings.json", True)
-        appsettings = AppSettings(**data)
-        appsettings.server.port = int(os.getenv("FLOUDS_PORT", appsettings.server.port))
-        appsettings.server.host = os.getenv("FLOUDS_HOST", appsettings.server.host)
-        appsettings.server.type = os.getenv(
-            "FLOUDS_SERVER_TYPE", appsettings.server.type
+        ConfigLoader.__appsettings = AppSettings(**data)
+        # set isproduction
+        ConfigLoader.__appsettings.app.is_production = (
+            os.getenv("FLOUDS_API_ENV", "Production").lower() == "production"
         )
-        appsettings.app.debug = os.getenv("FLOUDS_DEBUG_MODE", "0") == "1"
-        return appsettings
+        ConfigLoader.__appsettings.server.port = int(os.getenv("FLOUDS_PORT", ConfigLoader.__appsettings.server.port))
+        ConfigLoader.__appsettings.server.host = os.getenv("FLOUDS_HOST", ConfigLoader.__appsettings.server.host)
+        ConfigLoader.__appsettings.server.type = os.getenv(
+            "FLOUDS_SERVER_TYPE", ConfigLoader.__appsettings.server.type
+        )
+        ConfigLoader.__appsettings.app.debug = os.getenv("FLOUDS_DEBUG_MODE", "0") == "1"
+        return ConfigLoader.__appsettings
 
     @staticmethod
     def _load_config_data(config_file_name: str, check_env_file: bool = False) -> dict:

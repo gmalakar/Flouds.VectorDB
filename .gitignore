@@ -1,19 +1,65 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*.so
 *.pyd
-.env
-*.env
+
+# Environment files
+.env*
+*.env*
+
+# Configuration files (development/local)
+appsettings.development.json
+appsettings.local.json
+appsettings.*.json
+!appsettings.json
+
+# Logs
 *.log
 logs/
+
+# Virtual environments
 venv/
 .venv/
+ENV/
+env/
+pyvenv.cfg
 .envrc
+
+# IDE/Editor files
 .idea/
 .vscode/
+*.swp
+*.swo
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
 lib/
 scripts/
+
+# Models and data
 app/onnx/
 onnx/
-pyvenv.cfg
-*.bat
+*.onnx
+*.model
+*.weights
+data/
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+
+# Temporary files
+*.tmp
+*.bak
+*.old
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+app/config/appsettings.development.json

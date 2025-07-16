@@ -1,0 +1,8 @@
+# Extra config to override default milvus.yaml
+common:
+  security:
+    authorizationEnabled: true
+    # The superusers will ignore some system check processes,
+    # like the old password verification when updating the credential
+    superUsers: root, admin
+    defaultRootPassword: "<set your password here>" # default password for root user. The maximum length is 72 characters, and double quotes are required.

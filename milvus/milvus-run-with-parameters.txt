@@ -1,0 +1,2 @@
+.\milvus-standalone.bat start <confif path> <data path>
+.\milvus-standalone.bat start 'C:\Workspace\floudsweb\flouds-vectordb\milvus\configs' 'C:\Workspace\floudsweb\flouds-vectordb\milvus\db'

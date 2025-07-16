@@ -1,42 +1,30 @@
 FROM python:3.11-slim
 
-# Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     FLOUDS_API_ENV=Production \
-    FLOUDS_DEBUG_MODE=0
+    FLOUDS_DEBUG_MODE=0 \
+    FLOUDS_LOG_PATH=/var/log/flouds
 
 WORKDIR /flouds-vector
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    netcat-openbsd \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY app/requirements.txt .
 
-# Install all requirements
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential netcat-openbsd curl \
+    && pip install --no-cache-dir -r requirements.txt \
+    && apt-get purge -y build-essential \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /root/.cache /tmp/* \
+    && find /usr/local -name "*.pyc" -delete \
+    && find /usr/local -name "__pycache__" -exec rm -rf {} +
 
-# Clean up build dependencies to reduce image size
-RUN apt-get purge -y build-essential && apt-get autoremove -y
-
-# Copy application code
 COPY app ./app
 
-# Create required directories
-RUN mkdir -p /app/secrets
-
-# Create log directory 
-ENV FLOUDS_LOG_PATH=/var/log/flouds
-RUN mkdir -p $FLOUDS_LOG_PATH && \
+RUN mkdir -p /app/secrets $FLOUDS_LOG_PATH && \
+    chmod 755 /app/secrets && \
     chmod 777 $FLOUDS_LOG_PATH
-    
-# Remove Python cache
-RUN rm -rf /root/.cache/*
 
 EXPOSE 19680
 
-# Directly start the Python application (no entrypoint script)
 CMD ["python", "-m", "app.main"]

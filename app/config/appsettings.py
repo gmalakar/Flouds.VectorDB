@@ -13,14 +13,13 @@ class AppConfig(BaseModel):
     name: str = Field(default="Flouds PY")
     debug: bool = Field(default=False)
     working_dir: str = Field(default=os.getcwd())
+    is_production: bool = Field(default=True)
 
 
 class ServerConfig(BaseModel):
     type: str = Field(default="uvicorn")
     host: str = Field(default="0.0.0.0")
     port: int = Field(default=5001)
-    reload: bool = Field(default=True)
-    workers: int = Field(default=4)
 
 
 class VectorDBConfig(BaseModel):

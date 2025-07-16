@@ -5,8 +5,13 @@ __pycache__/
 *.pyd
 
 # Environment files
-.env
-*.env
+.env*
+*.env*
+
+# Development configuration files
+appsettings.development.json
+appsettings.*.json
+!appsettings.json
 
 # Logs and test output
 *.log
@@ -33,6 +38,7 @@ venv.bak/
 # Git and version control
 .git/
 .gitignore
+.gitattributes
 
 # Build artifacts
 build/
@@ -40,6 +46,16 @@ dist/
 *.egg-info/
 .eggs/
 *.whl
+
+# Docker files
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# Scripts and documentation
+*.md
+*.ps1
+LICENSE*
 
 # Data, models, and cache
 onnx/
@@ -62,11 +78,9 @@ data/
 *.bin
 *.npz
 
-# Misc
+# OS-specific
 .DS_Store
 Thumbs.db
-
-# OS-specific
 ehthumbs.db
 Icon?
 desktop.ini
@@ -79,3 +93,8 @@ desktop.ini
 *.tmp
 *.bak
 *.old
+
+# Tests
+tests/
+test_*/
+*_test.py
