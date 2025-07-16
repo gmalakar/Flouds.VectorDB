@@ -74,7 +74,7 @@ You can set server type, host, port, logging, and Milvus options.
 }
 ```
 
-You can override any setting using environment variables (see below).
+You can override any setting using environment variables or the `.env` file.
 
 ---
 
@@ -105,7 +105,7 @@ You can override any setting using environment variables (see below).
 3. **Configure settings:**
    - Edit [app/config/appsettings.json](app/config/appsettings.json) for your Milvus and server settings.
    - Optionally, create environment-specific overrides such as [app/config/appsettings.development.json](app/config/appsettings.development.json).
-   - You can override any setting using environment variables.
+   - You can override any setting using environment variables or the `.env` file.
 
 4. **Run the server:**
    ```sh
@@ -118,14 +118,26 @@ You can override any setting using environment variables (see below).
 
 ---
 
-## Environment Variables
+## Environment Variables and .env File
 
-- `FLOUDS_API_ENV` — Set to `Development`, `Production`, etc. to load environment-specific config.
-- `VECTORDB_USERNAME` — Milvus admin username (overrides config).
-- `VECTORDB_PASSWORD` — Milvus admin password (overrides config).
-- `VECTORDB_ENDPOINT` — Milvus endpoint/host (overrides config).
-- `VECTORDB_PORT` — Milvus port (overrides config).
-- `FLOUDS_PORT`, `FLOUDS_HOST`, `FLOUDS_SERVER_TYPE` — Override server settings.
+The `.env` file is used to configure environment variables for the container, including Milvus connection details, logging paths, and other settings.
+
+**Example `.env`:**
+```
+FLOUDS_API_ENV=Production
+FLOUDS_DEBUG_MODE=0
+VECTORDB_USERNAME=admin
+VECTORDB_PASSWORD=yourpassword
+VECTORDB_ENDPOINT=localhost
+VECTORDB_PORT=19530
+FLOUDS_LOG_PATH=/var/log/flouds
+VECTORDB_LOG_PATH=/your/host/logs
+```
+
+- The `.env` file allows you to configure the container without modifying code or the Dockerfile.
+- It is used to set environment variables for Milvus connection, logging, debug mode, and other runtime options.
+- You can keep different `.env` files for development, testing, and production.
+- The container will read this file at startup and apply the settings automatically.
 
 ---
 
@@ -216,16 +228,84 @@ curl -X POST http://localhost:19680/vector_store_users/set \
 
 ---
 
-## Useful Points
+## Docker Usage
 
-- All endpoints require a valid `tenant_code` in the request body and a `token` in the `Authorization` header (format: `user:password`).
-- The `/vector_store/set_vector_store` endpoint must be called by a super user (admin/root).
-- You can use environment variables or config files to manage credentials and server settings.
-- Logs are written to the `logs/` directory and to the console.
-- The API is designed to be thread-safe and production-ready.
-- You can run tests using `pytest` in the project root.
-- The project supports both [Uvicorn](https://www.uvicorn.org/) and [Hypercorn](https://pgjones.gitlab.io/hypercorn/) as ASGI servers.
-- For development, use the `FLOUDS_API_ENV=Development` environment variable to load development-specific settings.
+FloudsVectors.Py is available as a pre-built image on [Docker Hub](https://hub.docker.com/r/gmalakar/flouds-vector).
+
+### 1. Pull the Docker image from Docker Hub
+
+```sh
+docker pull gmalakar/flouds-vector:latest
+```
+
+### 2. Prepare your `.env` file
+
+See above for an example `.env` file.  
+This file is essential for configuring your deployment.
+
+### 3. Build the Docker image locally (optional)
+
+You can build the image manually:
+
+```sh
+docker build -t floudsvectors-py .
+```
+
+Or use the provided PowerShell helper script:
+
+```sh
+./build-flouds-vector.ps1
+```
+
+### 4. Start the container
+
+You can start the container manually:
+
+```sh
+docker run -p 19680:19680 \
+  --env-file .env \
+  -v /your/host/logs:/var/log/flouds \
+  floudsvectors-py
+```
+
+Or use the provided PowerShell helper script:
+
+```sh
+./start-flouds-vector.ps1
+```
+
+- The default port is `19680` (see `appsettings.json` or override with `FLOUDS_PORT`).
+- You can override any config value using environment variables or your `.env` file.
+- The following Milvus connection variables are optional and can be set as needed:
+  - `VECTORDB_USERNAME`
+  - `VECTORDB_PASSWORD`
+  - `VECTORDB_ENDPOINT`
+  - `VECTORDB_PORT`
+
+### 5. Mount persistent data or logs (optional)
+
+If you want to persist logs or other data outside the container:
+
+```sh
+docker run -p 19680:19680 \
+  -v $(pwd)/logs:/var/log/flouds \
+  --env-file .env \
+  floudsvectors-py
+```
+
+---
+
+**Tips:**
+- For development mode, set `FLOUDS_API_ENV=Development` and `FLOUDS_DEBUG_MODE=1` in your `.env`.
+- You can use Docker Compose for more advanced setups (e.g., with Milvus as a service).
+- Make sure Milvus is accessible from inside the container (networking).
+
+---
+
+## Logging
+
+Logs are written to the `/var/log/flouds` directory inside the container and can be mapped to your host for persistence.  
+Configure log file and level in [app/config/appsettings.json](app/config/appsettings.json) or via environment variables.
 
 ---
 
@@ -239,66 +319,14 @@ pytest
 
 ---
 
-## Logging
+## Useful Points
 
-Logs are written to the `logs/` directory and to the console.  
-Configure log file and level in [app/config/appsettings.json](app/config/appsettings.json) or via environment variables.
-
----
-
-## Docker Usage
-
-You can run FloudsVectors.Py as a Docker container for easy deployment.
-
-### 1. Build the Docker image
-
-```sh
-docker build -t floudsvectors-py .
-```
-
-### 2. Run the container
-
-```sh
-docker run -p 19680:19680 \
-  -e FLOUDS_API_ENV=Production \
-  -e FLOUDS_DEBUG_MODE=0 \
-  -e FLOUDS_PORT=19680 \
-  -e VECTORDB_USERNAME=admin \
-  -e VECTORDB_PASSWORD=yourpassword \
-  -e VECTORDB_ENDPOINT=localhost \
-  -e VECTORDB_PORT=19530 \
-  floudsvectors-py
-```
-
-- The default port is `19680` (see `appsettings.json` or override with `FLOUDS_PORT`).
-- You can override any config value using environment variables.
-- The following Milvus connection variables are optional and can be set as needed:
-  - `VECTORDB_USERNAME`
-  - `VECTORDB_PASSWORD`
-  - `VECTORDB_ENDPOINT`
-  - `VECTORDB_PORT`
-
-### 3. Mount persistent data or logs (optional)
-
-If you want to persist logs or other data outside the container:
-
-```sh
-docker run -p 19680:19680 \
-  -v $(pwd)/logs:/flouds-vector/logs \
-  -e FLOUDS_API_ENV=Production \
-  -e VECTORDB_USERNAME=admin \
-  -e VECTORDB_PASSWORD=yourpassword \
-  -e VECTORDB_ENDPOINT=localhost \
-  -e VECTORDB_PORT=19530 \
-  floudsvectors-py
-```
-
----
-
-**Tips:**
-- For development mode, set `FLOUDS_API_ENV=Development` and `FLOUDS_DEBUG_MODE=1`.
-- You can use Docker Compose for more advanced setups (e.g., with Milvus as a service).
-- Make sure Milvus is accessible from inside the container (networking).
+- All endpoints require a valid `tenant_code` in the request body and a `token` in the `Authorization` header (format: `user:password`).
+- The `/vector_store/set_vector_store` endpoint must be called by a super user (admin/root).
+- You can use environment variables or config files to manage credentials and server settings.
+- The API is designed to be thread-safe and production-ready.
+- The project supports both [Uvicorn](https://www.uvicorn.org/) and [Hypercorn](https://pgjones.gitlab.io/hypercorn/) as ASGI servers.
+- For development, use the `FLOUDS_API_ENV=Development` environment variable to load development-specific settings.
 
 ---
 
