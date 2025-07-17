@@ -96,7 +96,11 @@ class BaseMilvus:
 
                 # Try to read password from plain text file
                 password = None
-                password_file = APP_SETTINGS.vectordb.password_file
+
+                password_file = (
+                    os.getenv("VECTORDB_PASSWORD_FILE")
+                    or APP_SETTINGS.vectordb.password_file
+                )
 
                 if password_file and os.path.exists(password_file):
                     try:

@@ -13,7 +13,7 @@ def get_logger(name: str = "flouds") -> logging.Logger:
     is_production = os.getenv("FLOUDS_API_ENV", "Production").lower() == "production"
 
     if is_production:
-        log_dir = os.getenv("FLOUDS_LOG_PATH", "/var/logs/flouds")
+        log_dir = os.getenv("FLOUDS_LOG_PATH", "/flouds-vector/logs")
     else:
         # Get parent directory of app folder and create logs folder there
         current_dir = os.path.dirname(os.path.abspath(__file__))  # app folder
@@ -37,8 +37,7 @@ def get_logger(name: str = "flouds") -> logging.Logger:
     )
     logger.setLevel(level)
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        "%Y-%m-%d %H:%M:%S"
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"
     )
 
     # Console handler

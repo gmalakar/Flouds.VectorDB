@@ -1,13 +1,33 @@
 ﻿# =============================================================================
 # File: start-flouds-vectordb.ps1
+# Date: 2024-06-10
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+#
+# This script sets up and runs the Flouds Vector container with proper volume mapping
+# and environment variable handling based on a .env file.
+#
+# Usage:
+#   ./start-flouds-vectordb.ps1 [-EnvFile <path>] [-InstanceName <name>] [-ImageName <name>] [-Port <port>] [-Force] [-BuildImage] [-PullAlways]
+#
+# Parameters:
+#   -EnvFile       : Path to .env file (default: ".env")
+#   -InstanceName  : Name of the Docker container (default: "floudsvector-instance")
+#   -ImageName     : Docker image to use (default: "gmalakar/flouds-vector:latest")
+#   -Port          : Port to expose for the API (default: 19680)
+#   -Force         : Force restart container if it exists
+#   -BuildImage    : Build Docker image locally before starting container
+#   -PullAlways    : Always pull image from registry before running
 # =============================================================================
 
 param (
     [string]$EnvFile = ".env",
     [string]$InstanceName = "floudsvector-instance",
     [string]$ImageName = "gmalakar/flouds-vector:latest",
-    [int]$Port = 19680
+    [int]$Port = 19680,
+    [switch]$Force = $false,
+    [switch]$BuildImage = $false,
+    [switch]$PullAlways = $false
 )
 
 function Write-StepHeader {
@@ -17,24 +37,24 @@ function Write-StepHeader {
 
 function Write-Success {
     param ([string]$Message)
-    Write-Host "✅ $Message" -ForegroundColor Green
+    Write-Host " $Message" -ForegroundColor Green
 }
 
 function Write-Warning {
     param ([string]$Message)
-    Write-Host "⚠️ $Message" -ForegroundColor Yellow
+    Write-Host " $Message" -ForegroundColor Yellow
 }
 
 function Write-Error {
     param ([string]$Message)
-    Write-Host "❌ $Message" -ForegroundColor Red
+    Write-Host " $Message" -ForegroundColor Red
     exit 1
 }
 
 function New-NetworkIfMissing {
     param ([string]$Name)
     if (-not (docker network ls --format '{{.Name}}' | Where-Object { $_ -eq $Name })) {
-        Write-Host "🔧 Creating network: $Name" -ForegroundColor Yellow
+        Write-Host " Creating network: $Name" -ForegroundColor Yellow
         docker network create $Name | Out-Null
         if ($LASTEXITCODE -eq 0) {
             Write-Success "Network $Name created successfully"
@@ -58,7 +78,7 @@ function Connect-NetworkIfNotConnected {
     }
     $networks = docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' $Container
     if ($networks -notmatch "\b$Network\b") {
-        Write-Host "🔗 Connecting network $Network to container $Container" -ForegroundColor Yellow
+        Write-Host " Connecting network $Network to container $Container" -ForegroundColor Yellow
         docker network connect $Network $Container 2>$null
         if ($LASTEXITCODE -eq 0) {
             Write-Success "Successfully connected $Container to $Network"
@@ -109,7 +129,9 @@ if (-not (Test-Path $EnvFile)) {
 $floudsVectorNetwork = "flouds_vector_network"
 $milvusNetwork = if ($envVars.ContainsKey("VECTORDB_NETWORK")) { $envVars["VECTORDB_NETWORK"] } else { "milvus_network" }
 $milvusContainerName = if ($envVars.ContainsKey("VECTORDB_ENDPOINT")) { $envVars["VECTORDB_ENDPOINT"] } else { "milvus-standalone" }
-
+$workingDir = "/flouds-vector"
+$containerPasswordFile = "/flouds-vector/secrets/password.txt"
+$containerLogPath = "/flouds-vector/logs"
 # Check and create log directory if needed
 if ($envVars.ContainsKey("VECTORDB_LOG_PATH")) {
     $hostLogPath = $envVars["VECTORDB_LOG_PATH"]
@@ -131,7 +153,7 @@ New-NetworkIfMissing -Name $milvusNetwork
 
 # Stop and remove existing container if it exists
 if (docker ps -a --format '{{.Names}}' | Where-Object { $_ -eq $InstanceName }) {
-    Write-Host "🛑 Stopping and removing existing container: $InstanceName" -ForegroundColor Yellow
+    Write-Host " Stopping and removing existing container: $InstanceName" -ForegroundColor Yellow
     docker stop $InstanceName | Out-Null
     docker rm $InstanceName | Out-Null
     Write-Success "Container removed"
@@ -150,8 +172,12 @@ if (-not (docker ps --format '{{.Names}}' | Where-Object { $_ -eq $milvusContain
 }
 
 # Build Docker run command
-$dockerArgs = @(
-    "run", "-d",
+$dockerArgs = @("run", "-d")
+if ($PullAlways) {
+    $dockerArgs += "--pull"
+    $dockerArgs += "always"
+}
+$dockerArgs += @(
     "--name", $InstanceName,
     "--network", $floudsVectorNetwork,
     "-p", "${Port}:${Port}",
@@ -170,18 +196,17 @@ foreach ($key in @("VECTORDB_ENDPOINT", "VECTORDB_PORT", "VECTORDB_USERNAME", "V
 # Add password file if specified
 if ($envVars.ContainsKey("VECTORDB_PASSWORD_FILE")) {
     $passwordFile = $envVars["VECTORDB_PASSWORD_FILE"]
-    Write-Host "Mounting password file: $passwordFile → /app/secrets/password.txt"
+    Write-Host "Mounting password file: $passwordFile  $containerPasswordFile"
     $dockerArgs += "-v"
-    $dockerArgs += "${passwordFile}:/app/secrets/password.txt:rw"
+    $dockerArgs += "${passwordFile}:${containerPasswordFile}:rw"
     $dockerArgs += "-e"
-    $dockerArgs += "VECTORDB_PASSWORD_FILE=/app/secrets/password.txt"
+    $dockerArgs += "VECTORDB_PASSWORD_FILE=$containerPasswordFile"
 }
 
 # Add log directory if specified
 if ($envVars.ContainsKey("VECTORDB_LOG_PATH")) {
     $hostLogPath = $envVars["VECTORDB_LOG_PATH"]
-    $containerLogPath = if ($envVars.ContainsKey("FLOUDS_LOG_PATH")) { $envVars["FLOUDS_LOG_PATH"] } else { "/var/logs/flouds" }
-    Write-Host "Mounting logs: $hostLogPath → $containerLogPath"
+    Write-Host "Mounting logs: $hostLogPath  $containerLogPath"
     $dockerArgs += "-v"
     $dockerArgs += "${hostLogPath}:${containerLogPath}:rw"
     $dockerArgs += "-e"
@@ -233,3 +258,4 @@ $showLogs = Read-Host "Would you like to view container logs now? (y/n)"
 if ($showLogs -eq "y" -or $showLogs -eq "Y") {
     docker logs -f $InstanceName
 }
+Write-Host "========================================================="

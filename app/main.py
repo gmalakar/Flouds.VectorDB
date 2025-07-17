@@ -7,16 +7,17 @@
 import asyncio
 import signal
 import sys
-from app.logger import get_logger
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header
 
 from app.app_init import APP_SETTINGS
+from app.logger import get_logger
 from app.milvus.milvus_helper import MilvusHelper
 from app.routers import user, vector
 
 logger = get_logger("main")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -34,6 +35,7 @@ async def lifespan(app: FastAPI):
         sys.exit("VectorDB configuration is not set. Exiting application.")
     yield
 
+
 app = FastAPI(
     title="Flouds Vector API",
     description="API for Flouds Vector, a cloud-based vector database.",
@@ -41,11 +43,12 @@ app = FastAPI(
     openapi_url="/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 app.include_router(vector.router)
 app.include_router(user.router)
+
 
 @app.get("/")
 def root() -> dict:
@@ -58,10 +61,12 @@ def health() -> dict:
     """Health check endpoint."""
     return {"status": "healthy", "service": "Flouds Vector"}
 
+
 def signal_handler(signum, frame):
     """Handle shutdown signals gracefully."""
     logger.info(f"Received signal {signum}, shutting down gracefully...")
     sys.exit(0)
+
 
 def run_server():
     # Register signal handlers for graceful shutdown
@@ -99,6 +104,7 @@ def run_server():
             log_level="info" if not APP_SETTINGS.app.debug else "debug",
             access_log=True,
         )
+
 
 if __name__ == "__main__":
     try:

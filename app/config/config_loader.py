@@ -28,12 +28,18 @@ class ConfigLoader:
         ConfigLoader.__appsettings.app.is_production = (
             os.getenv("FLOUDS_API_ENV", "Production").lower() == "production"
         )
-        ConfigLoader.__appsettings.server.port = int(os.getenv("FLOUDS_PORT", ConfigLoader.__appsettings.server.port))
-        ConfigLoader.__appsettings.server.host = os.getenv("FLOUDS_HOST", ConfigLoader.__appsettings.server.host)
+        ConfigLoader.__appsettings.server.port = int(
+            os.getenv("FLOUDS_PORT", ConfigLoader.__appsettings.server.port)
+        )
+        ConfigLoader.__appsettings.server.host = os.getenv(
+            "FLOUDS_HOST", ConfigLoader.__appsettings.server.host
+        )
         ConfigLoader.__appsettings.server.type = os.getenv(
             "FLOUDS_SERVER_TYPE", ConfigLoader.__appsettings.server.type
         )
-        ConfigLoader.__appsettings.app.debug = os.getenv("FLOUDS_DEBUG_MODE", "0") == "1"
+        ConfigLoader.__appsettings.app.debug = (
+            os.getenv("FLOUDS_DEBUG_MODE", "0") == "1"
+        )
         return ConfigLoader.__appsettings
 
     @staticmethod
