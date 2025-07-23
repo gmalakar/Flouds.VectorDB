@@ -74,17 +74,7 @@ FLOUDS_VECTOR_NETWORK="flouds_vector_network"
 CONTAINER_PASSWORD_FILE="/flouds-vector/secrets/password.txt"
 CONTAINER_LOG_PATH="/flouds-vector/logs"
 
-# Display header
-echo "========================================================="
-echo "                FLOUDS VECTOR STARTER SCRIPT             "
-echo "========================================================="
-echo "Instance Name : $INSTANCE_NAME"
-echo "Image         : $IMAGE_NAME"
-echo "Environment   : $ENV_FILE"
-echo "Port          : $PORT"
-echo "========================================================="
-
-# Helper: ensure network exists
+# Helper functions
 ensure_network() {
     local name="$1"
     if ! docker network ls --format '{{.Name}}' | grep -q "^${name}$"; then
@@ -96,7 +86,6 @@ ensure_network() {
     fi
 }
 
-# Helper: attach network if not already connected
 attach_network_if_not_connected() {
     local container="$1"
     local network="$2"
@@ -112,6 +101,66 @@ attach_network_if_not_connected() {
         echo "✅ Container $container is already connected to $network"
     fi
 }
+
+test_directory_writable() {
+    local path="$1"
+    local test_file="${path}/test_write_$$_$(date +%s).tmp"
+    if echo "test" > "$test_file" 2>/dev/null && rm -f "$test_file" 2>/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+set_directory_permissions() {
+    local path="$1"
+    local description="$2"
+    
+    if [[ ! -d "$path" ]]; then
+        echo "⚠️ $description directory does not exist: $path"
+        echo "Creating directory..."
+        if ! mkdir -p "$path"; then
+            echo "❌ Failed to create $description directory: $path"
+            exit 1
+        fi
+        echo "✅ $description directory created: $path"
+    else
+        echo "✅ Found $description directory: $path"
+    fi
+    
+    # Test if directory is writable
+    if test_directory_writable "$path"; then
+        echo "✅ $description directory is writable: $path"
+    else
+        echo "⚠️ $description directory is not writable: $path"
+        echo "Setting permissions on $description directory..."
+        if chmod 755 "$path" 2>/dev/null; then
+            echo "✅ Permissions set successfully"
+        else
+            echo "⚠️ Failed to set permissions on $description directory"
+            echo "⚠️ $description may not be writable. Please check directory permissions manually."
+            if [[ "$FORCE" != true ]]; then
+                read -p "Continue anyway? (y/n) " continue
+                if [[ "$continue" != "y" ]]; then
+                    echo "Aborted by user."
+                    exit 0
+                fi
+            else
+                echo "Force flag set, continuing anyway."
+            fi
+        fi
+    fi
+}
+
+# Display header
+echo "========================================================="
+echo "                FLOUDS VECTOR STARTER SCRIPT             "
+echo "========================================================="
+echo "Instance Name : $INSTANCE_NAME"
+echo "Image         : $IMAGE_NAME"
+echo "Environment   : $ENV_FILE"
+echo "Port          : $PORT"
+echo "========================================================="
 
 # Read .env file
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -129,16 +178,9 @@ fi
 : "${VECTORDB_NETWORK:=milvus_network}"
 : "${VECTORDB_ENDPOINT:=milvus-standalone}"
 
-# Check and create log directory if needed
+# Check and set permissions for log directory
 if [[ -n "$VECTORDB_LOG_PATH" ]]; then
-    if [[ ! -d "$VECTORDB_LOG_PATH" ]]; then
-        echo "⚠️ Log directory does not exist: $VECTORDB_LOG_PATH"
-        echo "Creating directory..."
-        mkdir -p "$VECTORDB_LOG_PATH"
-        echo "✅ Log directory created: $VECTORDB_LOG_PATH"
-    else
-        echo "✅ Found log directory: $VECTORDB_LOG_PATH"
-    fi
+    set_directory_permissions "$VECTORDB_LOG_PATH" "Log"
 else
     echo "⚠️ VECTORDB_LOG_PATH not set. Container logs will not be persisted to host."
 fi
@@ -197,6 +239,11 @@ done
 
 # Add password file if specified
 if [[ -n "$VECTORDB_PASSWORD_FILE" ]]; then
+    passwordFileDir=$(dirname "$VECTORDB_PASSWORD_FILE")
+    
+    # Check if password file directory exists and is writable
+    set_directory_permissions "$passwordFileDir" "Password file"
+    
     echo "Mounting password file: $VECTORDB_PASSWORD_FILE → $CONTAINER_PASSWORD_FILE"
     DOCKER_ARGS+=(-v "$VECTORDB_PASSWORD_FILE:$CONTAINER_PASSWORD_FILE:rw")
     DOCKER_ARGS+=(-e "VECTORDB_PASSWORD_FILE=$CONTAINER_PASSWORD_FILE")

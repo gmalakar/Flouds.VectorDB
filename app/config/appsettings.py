@@ -25,8 +25,8 @@ class ServerConfig(BaseModel):
 class VectorDBConfig(BaseModel):
     endpoint: str = Field(default="localhost")
     port: int = Field(default=19530)
-    username: str = Field(default="admin")
-    password: str = Field(default="@Milvus2025Milvus#")
+    username: str = Field(default="root")
+    password: str = Field(default="Milvus")
     password_file: str = Field(default="/app/secrets/password.txt")
     default_dimension: int = Field(default=256)
     primary_key: str = Field(

@@ -107,6 +107,57 @@ function Read-EnvFile {
     return $envVars
 }
 
+function Test-DirectoryWritable {
+    param ([string]$Path)
+    try {
+        $testFile = Join-Path -Path $Path -ChildPath "test_write_$([Guid]::NewGuid().ToString()).tmp"
+        [System.IO.File]::WriteAllText($testFile, "test")
+        Remove-Item -Path $testFile -Force
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Set-DirectoryPermissions {
+    param (
+        [string]$Path,
+        [string]$Description
+    )
+    if (-not (Test-Path $Path)) {
+        Write-Warning "$Description directory does not exist: $Path"
+        Write-Host "Creating directory..." -ForegroundColor Yellow
+        New-Item -ItemType Directory -Path $Path -Force | Out-Null
+        Write-Success "$Description directory created: $Path"
+    } else {
+        Write-Success "Found $Description directory: $Path"
+    }
+    
+    # Test if directory is writable
+    if (Test-DirectoryWritable -Path $Path) {
+        Write-Success "$Description directory is writable: $Path"
+    } else {
+        Write-Warning "$Description directory is not writable: $Path"
+        Write-Host "Setting permissions on $Description directory..." -ForegroundColor Yellow
+        try {
+            # Try to set permissions (works on Windows)
+            $acl = Get-Acl $Path
+            $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule("Everyone", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")
+            $acl.SetAccessRule($accessRule)
+            Set-Acl $Path $acl
+            Write-Success "Permissions set successfully"
+        } catch {
+            Write-Warning "Failed to set permissions: $_"
+            Write-Warning "$Description may not be writable. Please check directory permissions manually."
+            $continue = Read-Host "Continue anyway? (y/n)"
+            if ($continue -ne "y") {
+                Write-Host "Aborted by user." -ForegroundColor Red
+                exit 0
+            }
+        }
+    }
+}
+
 Write-Host "========================================================="
 Write-Host "                FLOUDS VECTOR STARTER SCRIPT             " -ForegroundColor Cyan
 Write-Host "========================================================="
@@ -132,17 +183,11 @@ $milvusContainerName = if ($envVars.ContainsKey("VECTORDB_ENDPOINT")) { $envVars
 $workingDir = "/flouds-vector"
 $containerPasswordFile = "/flouds-vector/secrets/password.txt"
 $containerLogPath = "/flouds-vector/logs"
+
 # Check and create log directory if needed
 if ($envVars.ContainsKey("VECTORDB_LOG_PATH")) {
     $hostLogPath = $envVars["VECTORDB_LOG_PATH"]
-    if (-not (Test-Path $hostLogPath)) {
-        Write-Warning "Log directory does not exist: $hostLogPath"
-        Write-Host "Creating directory..." -ForegroundColor Yellow
-        New-Item -ItemType Directory -Path $hostLogPath -Force | Out-Null
-        Write-Success "Log directory created: $hostLogPath"
-    } else {
-        Write-Success "Found log directory: $hostLogPath"
-    }
+    Set-DirectoryPermissions -Path $hostLogPath -Description "Log"
 } else {
     Write-Warning "VECTORDB_LOG_PATH not set. Container logs will not be persisted to host."
 }
@@ -196,6 +241,11 @@ foreach ($key in @("VECTORDB_ENDPOINT", "VECTORDB_PORT", "VECTORDB_USERNAME", "V
 # Add password file if specified
 if ($envVars.ContainsKey("VECTORDB_PASSWORD_FILE")) {
     $passwordFile = $envVars["VECTORDB_PASSWORD_FILE"]
+    $passwordFileDir = Split-Path -Parent $passwordFile
+    
+    # Check if password file directory exists and is writable
+    Set-DirectoryPermissions -Path $passwordFileDir -Description "Password file"
+    
     Write-Host "Mounting password file: $passwordFile  $containerPasswordFile"
     $dockerArgs += "-v"
     $dockerArgs += "${passwordFile}:${containerPasswordFile}:rw"
@@ -236,7 +286,7 @@ try {
 
         Write-Host "========================================================="
         Write-Host "Container Status:"
-        docker ps --filter "name=$InstanceName" --format "table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+        docker ps --filter "name=$InstanceName" --format "table {{.ID}}`t{{.Image}}`t{{.Status}}`t{{.Ports}}"
         Write-Host "========================================================="
         Write-Success "API available at: http://localhost:$Port/docs"
     } else {

@@ -1,2 +1,3 @@
 .\milvus-standalone.bat start <confif path> <data path>
-.\milvus-standalone.bat start 'C:\Workspace\floudsweb\flouds-vectordb\milvus\configs' 'C:\Workspace\floudsweb\flouds-vectordb\milvus\db'
+./milvus-standalone.bat start 'c:/Workspace/floudsweb/flouds-vectordb/milvus/configs' 'c:/Workspace/floudsweb/flouds-vectordb/milvus/db'
+./milvus-standalone.sh start '/srv/docker/milvus/configs' '/mnt/data/milvus'
