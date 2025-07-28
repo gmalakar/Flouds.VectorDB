@@ -53,19 +53,24 @@ You can set server type, host, port, logging, and Milvus options.
     "name": "FloudsVectors.Py"
   },
   "server": {
-    "type": "hypercorn",
     "host": "0.0.0.0",
-    "port": 19680,
-    "reload": true,
-    "workers": 4
+    "port": 19680
   },
   "vectordb": {
     "endpoint": "http://localhost",
     "port": 19530,
     "username": "root",
     "password": "Milvus",
-    "default_dimension": 256,
-    "admin_role_name": "flouds_admin_role"
+    "default_dimension": 384,
+    "admin_role_name": "flouds_admin_role",
+    "primary_key": "flouds_vector_id",
+    "primary_key_data_type": "VARCHAR",
+    "vector_field_name": "flouds_vector",
+    "index_params": {
+      "nlist": 1024,
+      "metric_type": "COSINE",
+      "index_type": "IVF_FLAT"
+    }
   },
   "logging": {
     "folder": "logs",
@@ -83,7 +88,7 @@ You can override any setting using environment variables or the `.env` file.
 - Python 3.9+
 - Milvus (standalone or cluster)
 - See [app/requirements.txt](app/requirements.txt) for Python dependencies
-- [Uvicorn](https://www.uvicorn.org/) or [Hypercorn](https://pgjones.gitlab.io/hypercorn/) for running the server
+- [Uvicorn](https://www.uvicorn.org/) for running the server
 
 ---
 
@@ -174,7 +179,7 @@ curl -X POST http://localhost:19680/vector_store/set_vector_store \
   -H "Authorization: Bearer admin:admin_password" \
   -d '{
     "tenant_code": "mytenant",
-    "vector_dimension": 256
+    "vector_dimension": 384
   }'
 ```
 
@@ -268,10 +273,14 @@ docker run -p 19680:19680 \
   floudsvectors-py
 ```
 
-Or use the provided PowerShell helper script:
+Or use the provided helper scripts:
 
 ```sh
-./start-flouds-vector.ps1
+# Windows
+./start-flouds-vectordb.ps1
+
+# Linux/macOS
+./start-flouds-vectordb.sh
 ```
 
 - The default port is `19680` (see `appsettings.json` or override with `FLOUDS_PORT`).
@@ -325,7 +334,7 @@ pytest
 - The `/vector_store/set_vector_store` endpoint must be called by a super user (admin/root).
 - You can use environment variables or config files to manage credentials and server settings.
 - The API is designed to be thread-safe and production-ready.
-- The project supports both [Uvicorn](https://www.uvicorn.org/) and [Hypercorn](https://pgjones.gitlab.io/hypercorn/) as ASGI servers.
+- The project uses [Uvicorn](https://www.uvicorn.org/) as the ASGI server.
 - For development, use the `FLOUDS_API_ENV=Development` environment variable to load development-specific settings.
 
 ---

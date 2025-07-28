@@ -9,8 +9,8 @@ from unittest.mock import patch
 import pytest
 
 from app.models.base_request import BaseRequest
-from app.models.embeded_meta import EmbeddedMeta
-from app.models.embeded_vector import EmbeddedVector
+from app.models.embedded_meta import EmbeddedMeta
+from app.models.embedded_vector import EmbeddedVector
 from app.models.insert_request import InsertEmbeddedRequest
 from app.models.list_response import ListResponse
 from app.models.search_request import SearchEmbeddedRequest

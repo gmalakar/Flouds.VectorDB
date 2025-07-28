@@ -668,7 +668,7 @@ class BaseMilvus:
         """
         Returns the primary key type from settings or 'VARCHAR' as default.
         """
-        return (APP_SETTINGS.vectordb.primary_key_type or "VARCHAR").upper()
+        return (APP_SETTINGS.vectordb.primary_key_data_type or "VARCHAR").upper()
 
     @staticmethod
     def _get_dtype_map() -> dict:
@@ -755,6 +755,9 @@ class BaseMilvus:
         vector_index_name = "flouds_vector_index"
         model_index_name = "flouds_model_index"
         vector_field_name = BaseMilvus._get_vector_field_name()
+        nlist = APP_SETTINGS.vectordb.index_params.nlist or 1024
+        metric_type = APP_SETTINGS.vectordb.index_params.metric_type or "COSINE"
+        index_type = APP_SETTINGS.vectordb.index_params.index_type or "IVF_FLAT"
         try:
             with BaseMilvus.__db_switch_lock:
                 db_admin_client = BaseMilvus._get_or_create_tenant_connection(
@@ -762,9 +765,9 @@ class BaseMilvus:
                 )
                 vector_index_params = {
                     "field_name": vector_field_name,
-                    "index_type": "IVF_FLAT",
-                    "metric_type": "COSINE",
-                    "params": {"nlist": 1024},
+                    "index_type": index_type,
+                    "metric_type": metric_type,
+                    "params": {"nlist": nlist},
                     "index_name": vector_index_name,
                 }
                 # Check if index exists
@@ -1071,34 +1074,6 @@ class BaseMilvus:
                     summary["collection_created"] = True
                 else:
                     logger.info(f"Collection '{collection_name}' already exists.")
-
-                # index_name = "flouds_vector_index"
-                # indexes = db_admin_client.list_indexes(collection_name=collection_name)
-                # vector_field_name = BaseMilvus._get_vector_field_name()
-                # existing_indexes = set()
-                # for idx in indexes:
-                #     if isinstance(idx, dict) and "index_name" in idx:
-                #         existing_indexes.add(idx["index_name"])
-                #     elif isinstance(idx, str):
-                #         existing_indexes.add(idx)
-                # if index_name not in existing_indexes:
-                #     ip = IndexParams()
-                #     ip.add_index(
-                #         field_name=vector_field_name,
-                #         index_type="IVF_FLAT",
-                #         index_name=index_name,
-                #         metric_type="COSINE",
-                #         params={"nlist": 1024},
-                #     )
-                #     db_admin_client.create_index(
-                #         collection_name=collection_name, index_params=ip
-                #     )
-                #     logger.info(f"Index '{index_name}' created on '{collection_name}'.")
-                #     summary["index_created"] = True
-                # else:
-                #     logger.info(
-                #         f"Index '{index_name}' already exists on '{collection_name}'."
-                #     )
 
                 # 2. Role
                 roles = db_admin_client.list_roles()

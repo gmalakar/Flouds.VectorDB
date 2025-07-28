@@ -1,6 +1,5 @@
 fastapi[standard]
 uvicorn
-hypercorn
 numpy
 pydantic
 typing-extensions

@@ -22,18 +22,33 @@ class ServerConfig(BaseModel):
     port: int = Field(default=5001)
 
 
+class IndexParams(BaseModel):
+    nlist: int = Field(
+        default=1024,
+        description="Number of clusters for IVF index. Adjust based on dataset size.",
+    )
+    metric_type: str = Field(
+        default="COSINE",
+        description="Distance metric for the vector database.",
+    )
+    index_type: str = Field(
+        default="IVF_FLAT",
+        description="Index type for the vector database.",
+    )
+
+
 class VectorDBConfig(BaseModel):
     endpoint: str = Field(default="localhost")
     port: int = Field(default=19530)
     username: str = Field(default="root")
     password: str = Field(default="Milvus")
     password_file: str = Field(default="/app/secrets/password.txt")
-    default_dimension: int = Field(default=256)
+    default_dimension: int = Field(default=384)
     primary_key: str = Field(
         default="flouds_vector_id",
         description="Primary key for the vector database. Must be unique for each vector.",
     )
-    primary_key_type: str = Field(
+    primary_key_data_type: str = Field(
         default="VARCHAR",
         description="Data type for the primary key in the vector database.",
     )
@@ -45,6 +60,7 @@ class VectorDBConfig(BaseModel):
         default="flouds_admin_role",
         description="Role name for the admin user in the vector database.",
     )
+    index_params: IndexParams = Field(default_factory=IndexParams)
 
 
 class AppSettings(BaseModel):

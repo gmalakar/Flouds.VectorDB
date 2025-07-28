@@ -9,7 +9,7 @@ from typing import List
 from pydantic import Field
 
 from app.models.base_response import BaseResponse
-from app.models.embeded_meta import EmbeddedMeta
+from app.models.embedded_meta import EmbeddedMeta
 
 
 class SearchEmbeddedResponse(BaseResponse):

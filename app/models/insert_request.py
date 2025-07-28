@@ -9,7 +9,7 @@ from typing import List
 from pydantic import Field, model_validator
 
 from app.models.base_request import BaseRequest
-from app.models.embeded_vector import EmbeddedVector
+from app.models.embedded_vector import EmbeddedVector
 
 
 class InsertEmbeddedRequest(BaseRequest):
