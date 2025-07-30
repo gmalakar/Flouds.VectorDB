@@ -228,14 +228,17 @@ fi
 # Build Docker run command
 DOCKER_ARGS=(run -d $PULL_ALWAYS --name "$INSTANCE_NAME" --network "$FLOUDS_VECTOR_NETWORK" -p ${PORT}:${PORT} -e FLOUDS_API_ENV=Production -e APP_DEBUG_MODE=0)
 
-# Add environment variables
-for key in VECTORDB_ENDPOINT VECTORDB_PORT VECTORDB_USERNAME VECTORDB_NETWORK; do
-    val="${!key}"
-    if [[ -n "$val" ]]; then
-        echo "Setting $key: $val"
-        DOCKER_ARGS+=(-e "$key=$val")
-    fi
-done
+# Add all environment variables from .env file
+while IFS='=' read -r key value; do
+    # Skip empty lines and comments
+    [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+    
+    # Remove quotes from value
+    value=$(echo "$value" | sed 's/^["'\'']*//;s/["'\'']*$//')
+    
+    echo "Setting $key: $value"
+    DOCKER_ARGS+=(-e "$key=$value")
+done < <(grep -v '^[[:space:]]*$' "$ENV_FILE" 2>/dev/null || true)
 
 # Add password file if specified
 if [[ -n "$VECTORDB_PASSWORD_FILE" ]]; then

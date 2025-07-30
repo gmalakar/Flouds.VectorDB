@@ -230,12 +230,11 @@ $dockerArgs += @(
     "-e", "APP_DEBUG_MODE=0"
 )
 
-foreach ($key in @("VECTORDB_ENDPOINT", "VECTORDB_PORT", "VECTORDB_USERNAME", "VECTORDB_NETWORK")) {
-    if ($envVars.ContainsKey($key)) {
-        Write-Host "Setting ${key}: $($envVars[$key])"
-        $dockerArgs += "-e"
-        $dockerArgs += "$key=$($envVars[$key])"
-    }
+# Add all environment variables from .env file
+foreach ($key in $envVars.Keys) {
+    Write-Host "Setting ${key}: $($envVars[$key])"
+    $dockerArgs += "-e"
+    $dockerArgs += "$key=$($envVars[$key])"
 }
 
 # Add password file if specified
