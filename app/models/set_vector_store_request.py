@@ -15,5 +15,8 @@ class SetVectorStoreRequest(BaseRequest):
     """
 
     vector_dimension: int = Field(
-        ..., description="The dimension of the vector to be stored."
+        ...,
+        ge=1,
+        le=4096,
+        description="The dimension of the vector to be stored (1-4096).",
     )

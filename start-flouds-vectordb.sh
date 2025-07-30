@@ -178,7 +178,7 @@ fi
 : "${VECTORDB_NETWORK:=milvus_network}"
 : "${VECTORDB_ENDPOINT:=milvus-standalone}"
 
-# Check and set permissions for log directory
+# Check and create log directory if needed
 if [[ -n "$VECTORDB_LOG_PATH" ]]; then
     set_directory_permissions "$VECTORDB_LOG_PATH" "Log"
 else
@@ -226,7 +226,7 @@ else
 fi
 
 # Build Docker run command
-DOCKER_ARGS=(run -d $PULL_ALWAYS --name "$INSTANCE_NAME" --network "$FLOUDS_VECTOR_NETWORK" -p ${PORT}:${PORT} -e FLOUDS_API_ENV=Production -e FLOUDS_DEBUG_MODE=0)
+DOCKER_ARGS=(run -d $PULL_ALWAYS --name "$INSTANCE_NAME" --network "$FLOUDS_VECTOR_NETWORK" -p ${PORT}:${PORT} -e FLOUDS_API_ENV=Production -e APP_DEBUG_MODE=0)
 
 # Add environment variables
 for key in VECTORDB_ENDPOINT VECTORDB_PORT VECTORDB_USERNAME VECTORDB_NETWORK; do
@@ -247,6 +247,12 @@ if [[ -n "$VECTORDB_PASSWORD_FILE" ]]; then
     echo "Mounting password file: $VECTORDB_PASSWORD_FILE → $CONTAINER_PASSWORD_FILE"
     DOCKER_ARGS+=(-v "$VECTORDB_PASSWORD_FILE:$CONTAINER_PASSWORD_FILE:rw")
     DOCKER_ARGS+=(-e "VECTORDB_PASSWORD_FILE=$CONTAINER_PASSWORD_FILE")
+else
+    # Add password directly if no password file
+    if [[ -n "$VECTORDB_PASSWORD" ]]; then
+        echo "Setting VECTORDB_PASSWORD from environment"
+        DOCKER_ARGS+=(-e "VECTORDB_PASSWORD=$VECTORDB_PASSWORD")
+    fi
 fi
 
 # Add log directory if specified

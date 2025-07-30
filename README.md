@@ -9,13 +9,16 @@ If you are interested in vector databases, FastAPI, or scalable backend systems,
 
 ## Features
 
-- Multi-tenant vector store management
-- User and role management for each tenant
-- Insert and search vector embeddings with metadata
-- RESTful API endpoints (FastAPI)
-- Milvus vector database backend
-- Configurable via JSON and environment variables
-- Thread-safe and production-ready
+- **Multi-tenant vector store management** with complete data isolation
+- **User and role management** for each tenant with authentication
+- **Insert and search vector embeddings** with metadata support
+- **RESTful API endpoints** with OpenAPI documentation
+- **Milvus vector database backend** for high-performance similarity search
+- **Production-ready middleware** (CORS, rate limiting, error handling, metrics)
+- **API versioning** (`/api/v1/`) for backward compatibility
+- **Docker containerization** with health checks
+- **Configurable via JSON** and environment variables
+- **Thread-safe and scalable** architecture
 
 ---
 
@@ -85,10 +88,11 @@ You can override any setting using environment variables or the `.env` file.
 
 ## Requirements
 
-- Python 3.9+
-- Milvus (standalone or cluster)
+- **Python 3.9+**
+- **Milvus 2.3+** (standalone or cluster)
+- **Docker** (optional, for containerized deployment)
 - See [app/requirements.txt](app/requirements.txt) for Python dependencies
-- [Uvicorn](https://www.uvicorn.org/) for running the server
+- [Uvicorn](https://www.uvicorn.org/) ASGI server (included)
 
 ---
 
@@ -127,16 +131,25 @@ You can override any setting using environment variables or the `.env` file.
 
 The `.env` file is used to configure environment variables for the container, including Milvus connection details, logging paths, and other settings.
 
-**Example `.env`:**
+**Environment Setup:**
+```bash
+# Copy template and customize
+cp .env.template .env
+
+# Or use example for development
+cp .env.example .env
 ```
-FLOUDS_API_ENV=Production
-FLOUDS_DEBUG_MODE=0
-VECTORDB_USERNAME=admin
-VECTORDB_PASSWORD=yourpassword
+
+**Example `.env` for development:**
+```
+FLOUDS_API_ENV=Development
+APP_DEBUG_MODE=1
+VECTORDB_USERNAME=root
+VECTORDB_PASSWORD=Milvus
 VECTORDB_ENDPOINT=localhost
 VECTORDB_PORT=19530
-FLOUDS_LOG_PATH=/var/log/flouds
-VECTORDB_LOG_PATH=/your/host/logs
+VECTORDB_NETWORK=milvus_network
+FLOUDS_LOG_PATH=./logs
 ```
 
 - The `.env` file allows you to configure the container without modifying code or the Dockerfile.
@@ -148,33 +161,42 @@ VECTORDB_LOG_PATH=/your/host/logs
 
 ## API Endpoints
 
-### Vector Store
+All endpoints are versioned under `/api/v1/` and require authentication via `Authorization: Bearer user:password` header.
 
-- `POST /vector_store/set_vector_store`  
-  Create or retrieve a vector store for a tenant.
+### Vector Store Operations
 
-- `POST /vector_store/insert`  
-  Insert embedded vectors into a tenant's vector store.
-
-- `POST /vector_store/search`  
-  Search for embedded vectors in a tenant's vector store.
+- `POST /api/v1/vector_store/set_vector_store` - Create or retrieve a vector store for a tenant
+- `POST /api/v1/vector_store/insert` - Insert embedded vectors with metadata
+- `POST /api/v1/vector_store/search` - Search for similar vectors using cosine/L2 similarity
 
 ### User Management
 
-- `POST /vector_store_users/set`  
-  Create or set a user for a tenant.
+- `POST /api/v1/vector_store_users/set_user` - Create or manage tenant users
+- `POST /api/v1/vector_store_users/reset_password` - Reset user passwords
+
+### Monitoring
+
+- `GET /health` - Health check endpoint
+- `GET /api/v1/metrics` - System metrics and performance data
+- `GET /docs` - Interactive API documentation (Swagger UI)
 
 ---
 
 ## How to Call the API
 
 You can use `curl`, `httpie`, or any HTTP client to call the endpoints.  
-Below are some example requests:
+All API endpoints are versioned under `/api/v1/`. Below are some example requests:
 
-### 1. Create or Get a Vector Store
+### 1. Health Check
 
 ```sh
-curl -X POST http://localhost:19680/vector_store/set_vector_store \
+curl http://localhost:19680/health
+```
+
+### 2. Create or Get a Vector Store
+
+```sh
+curl -X POST http://localhost:19680/api/v1/vector_store/set_vector_store \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer admin:admin_password" \
   -d '{
@@ -183,47 +205,46 @@ curl -X POST http://localhost:19680/vector_store/set_vector_store \
   }'
 ```
 
-### 2. Insert Embedded Vectors
+### 3. Insert Embedded Vectors
 
 ```sh
-curl -X POST http://localhost:19680/vector_store/insert \
+curl -X POST http://localhost:19680/api/v1/vector_store/insert \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer user:password" \
   -d '{
     "tenant_code": "mytenant",
     "data": [
       {
+        "key": "doc_001",
         "chunk": "This is a test.",
-        "model": "all-MiniLM-L6-v2",
+        "model": "sentence-transformers",
+        "metadata": {"source": "test"},
         "vector": [0.1, 0.2, 0.3, ...]
       }
     ]
   }'
 ```
 
-### 3. Search Embedded Vectors
+### 4. Search Embedded Vectors
 
 ```sh
-curl -X POST http://localhost:19680/vector_store/search \
+curl -X POST http://localhost:19680/api/v1/vector_store/search \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer user:password" \
   -d '{
     "tenant_code": "mytenant",
-    "model": "all-MiniLM-L6-v2",
+    "model": "sentence-transformers",
     "limit": 10,
-    "offset": 0,
-    "nprobe": 10,
-    "round_decimal": -1,
-    "score_threshold": 0.8,
+    "score_threshold": 0.0,
     "metric_type": "COSINE",
     "vector": [0.1, 0.2, 0.3, ...]
   }'
 ```
 
-### 4. Create or Set a User
+### 5. Create or Set a User
 
 ```sh
-curl -X POST http://localhost:19680/vector_store_users/set \
+curl -X POST http://localhost:19680/api/v1/vector_store_users/set_user \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer admin:admin_password" \
   -d '{
@@ -237,44 +258,25 @@ curl -X POST http://localhost:19680/vector_store_users/set \
 
 FloudsVectors.Py is available as a pre-built image on [Docker Hub](https://hub.docker.com/r/gmalakar/flouds-vector).
 
-### 1. Pull the Docker image from Docker Hub
+### Option 1: Production Deployment (Recommended)
 
+Use this when you have an existing Milvus instance or want manual control.
+
+#### 1. Pull the Docker image
 ```sh
 docker pull gmalakar/flouds-vector:latest
 ```
 
-### 2. Prepare your `.env` file
-
-See above for an example `.env` file.  
-This file is essential for configuring your deployment.
-
-### 3. Build the Docker image locally (optional)
-
-You can build the image manually:
-
+#### 2. Build locally (optional)
 ```sh
+# Using PowerShell script
+./build-flouds-vector.ps1
+
+# Or manually
 docker build -t floudsvectors-py .
 ```
 
-Or use the provided PowerShell helper script:
-
-```sh
-./build-flouds-vector.ps1
-```
-
-### 4. Start the container
-
-You can start the container manually:
-
-```sh
-docker run -p 19680:19680 \
-  --env-file .env \
-  -v /your/host/logs:/var/log/flouds \
-  floudsvectors-py
-```
-
-Or use the provided helper scripts:
-
+#### 3. Start with helper scripts
 ```sh
 # Windows
 ./start-flouds-vectordb.ps1
@@ -283,31 +285,61 @@ Or use the provided helper scripts:
 ./start-flouds-vectordb.sh
 ```
 
-- The default port is `19680` (see `appsettings.json` or override with `FLOUDS_PORT`).
-- You can override any config value using environment variables or your `.env` file.
-- The following Milvus connection variables are optional and can be set as needed:
-  - `VECTORDB_USERNAME`
-  - `VECTORDB_PASSWORD`
-  - `VECTORDB_ENDPOINT`
-  - `VECTORDB_PORT`
+**Prerequisites:** Milvus must be running separately (see `/milvus` folder for scripts).
 
-### 5. Mount persistent data or logs (optional)
+### Option 2: Complete Development Stack
 
-If you want to persist logs or other data outside the container:
+Use this for local development or when you need everything in one command.
 
 ```sh
-docker run -p 19680:19680 \
-  -v $(pwd)/logs:/var/log/flouds \
-  --env-file .env \
-  floudsvectors-py
+# Start complete stack (Milvus + FloudsVector)
+docker-compose up -d
+
+# Stop everything
+docker-compose down
 ```
+
+This includes:
+- Milvus vector database
+- etcd (Milvus dependency)
+- MinIO (Milvus storage)
+- FloudsVector API
+
+### Configuration
+
+- **Port**: 19680 (API), 19530 (Milvus)
+- **Environment**: Use `.env` file or environment variables
+- **Logs**: Mounted to host for persistence
+- **Health Check**: Built-in Docker health monitoring
 
 ---
 
-**Tips:**
-- For development mode, set `FLOUDS_API_ENV=Development` and `FLOUDS_DEBUG_MODE=1` in your `.env`.
-- You can use Docker Compose for more advanced setups (e.g., with Milvus as a service).
-- Make sure Milvus is accessible from inside the container (networking).
+**When to use which:**
+- **PowerShell scripts**: Production deployment to existing Milvus infrastructure
+- **Docker Compose**: Local development, testing, or complete stack deployment
+- **Manual Docker**: Custom deployments, CI/CD pipelines, or Kubernetes
+
+### Environment Variables
+
+Key configuration options:
+```bash
+# Milvus Connection
+VECTORDB_ENDPOINT=localhost
+VECTORDB_PORT=19530
+VECTORDB_USERNAME=root
+VECTORDB_PASSWORD=Milvus
+VECTORDB_NETWORK=milvus_network
+
+# Security (alternative to password)
+VECTORDB_PASSWORD_FILE=/app/secrets/password.txt
+
+# API Configuration
+FLOUDS_API_ENV=Production
+APP_DEBUG_MODE=0
+
+# Logging
+FLOUDS_LOG_PATH=/var/log/flouds
+```
 
 ---
 
@@ -318,24 +350,52 @@ Configure log file and level in [app/config/appsettings.json](app/config/appsett
 
 ---
 
-## Testing
+## Development
 
-Run all tests with:
-
+### Testing
 ```sh
-pytest
+# Install development dependencies
+pip install -r app/requirements-dev.txt
+
+# Run tests with coverage
+pytest tests/ --cov=app
+
+# Code formatting
+black app/
+isort app/
 ```
+
+### Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and [SECURITY.md](SECURITY.md) for security policies.
 
 ---
 
-## Useful Points
+## Production Features
 
-- All endpoints require a valid `tenant_code` in the request body and a `token` in the `Authorization` header (format: `user:password`).
-- The `/vector_store/set_vector_store` endpoint must be called by a super user (admin/root).
-- You can use environment variables or config files to manage credentials and server settings.
-- The API is designed to be thread-safe and production-ready.
-- The project uses [Uvicorn](https://www.uvicorn.org/) as the ASGI server.
-- For development, use the `FLOUDS_API_ENV=Development` environment variable to load development-specific settings.
+### Security & Authentication
+- **Bearer token authentication** (`Authorization: Bearer user:password`)
+- **Multi-tenant isolation** with role-based access control
+- **Rate limiting** (100 requests/minute per IP)
+- **CORS support** for web frontend integration
+
+### Monitoring & Observability
+- **Health checks** with Milvus connectivity status
+- **Performance metrics** with request timing
+- **Comprehensive logging** with configurable levels
+- **Docker health checks** for container orchestration
+
+### Development & Deployment
+- **API versioning** for backward compatibility
+- **Environment-based configuration** (Development/Production)
+- **Docker containerization** with multi-stage builds
+- **CI/CD pipeline** with automated testing
+- **Thread-safe architecture** for concurrent operations
+
+### Key Notes
+- **Super user required** for tenant and vector store creation
+- **Consistent vector dimensions** required for similarity search
+- **Environment variables** override JSON configuration
+- **Uvicorn ASGI server** for high performance
 
 ---
 

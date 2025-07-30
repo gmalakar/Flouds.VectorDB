@@ -210,10 +210,7 @@ class BaseMilvus:
     @classmethod
     def _get_milvus_url(cls) -> str:
         """Gets the complete Milvus URL including port"""
-        endpoint = cls.__milvus_endpoint
-        # Remove trailing slash if present
-        endpoint = endpoint.rstrip("/")
-        # Don't add port if it's already in the URL
+        endpoint = cls.__milvus_endpoint.rstrip("/")
         if f":{cls.__milvus_port}" not in endpoint:
             return f"{endpoint}:{cls.__milvus_port}"
         return endpoint
@@ -654,21 +651,29 @@ class BaseMilvus:
         """
         Returns the primary key name from settings or the default.
         """
-        return APP_SETTINGS.vectordb.primary_key or BaseMilvus.__PRIMARY_FIELD_NAME
+        return (
+            getattr(APP_SETTINGS.vectordb, "primary_key", None)
+            or BaseMilvus.__PRIMARY_FIELD_NAME
+        )
 
     @staticmethod
     def _get_vector_field_name() -> str:
         """
         Returns the vector field name from settings or the default.
         """
-        return APP_SETTINGS.vectordb.vector_field_name or BaseMilvus.__VECTOR_FIELD_NAME
+        return (
+            getattr(APP_SETTINGS.vectordb, "vector_field_name", None)
+            or BaseMilvus.__VECTOR_FIELD_NAME
+        )
 
     @staticmethod
     def _get_primary_key_type() -> str:
         """
         Returns the primary key type from settings or 'VARCHAR' as default.
         """
-        return (APP_SETTINGS.vectordb.primary_key_data_type or "VARCHAR").upper()
+        return (
+            getattr(APP_SETTINGS.vectordb, "primary_key_data_type", None) or "VARCHAR"
+        ).upper()
 
     @staticmethod
     def _get_dtype_map() -> dict:

@@ -9,12 +9,16 @@ import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.app_init import APP_SETTINGS
 from app.config.validation import validate_config
 from app.logger import get_logger
+from app.middleware.error_handler import ErrorHandlerMiddleware
+from app.middleware.metrics import MetricsMiddleware
+from app.middleware.rate_limit import RateLimitMiddleware
 from app.milvus.milvus_helper import MilvusHelper
-from app.routers import user, vector
+from app.routers import metrics, user, vector
 
 logger = get_logger("main")
 
@@ -27,7 +31,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Configuration validation failed: {str(e)}")
         sys.exit("Configuration validation failed. Exiting application.")
-    
+
     if APP_SETTINGS.vectordb:
         try:
             MilvusHelper.initialize()
@@ -45,16 +49,31 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Flouds Vector API",
-    description="API for Flouds Vector, a cloud-based vector database.",
+    description="Multi-tenant vector database API with Milvus backend",
     version="1.0.0",
-    openapi_url="/openapi.json",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    openapi_url="/api/v1/openapi.json",
+    docs_url="/api/v1/docs",
+    redoc_url="/api/v1/redoc",
     lifespan=lifespan,
 )
 
-app.include_router(vector.router)
-app.include_router(user.router)
+# Add middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(ErrorHandlerMiddleware)
+app.add_middleware(RateLimitMiddleware, calls=100, period=60)
+app.add_middleware(MetricsMiddleware)
+
+app.include_router(vector.router, prefix="/api/v1/vector_store", tags=["Vector Store"])
+app.include_router(
+    user.router, prefix="/api/v1/vector_store_users", tags=["User Management"]
+)
+app.include_router(metrics.router, prefix="/api/v1", tags=["Monitoring"])
 
 
 @app.get("/")
@@ -72,11 +91,11 @@ def health() -> dict:
         milvus_status = "healthy"
     except:
         milvus_status = "unhealthy"
-    
+
     return {
         "status": "healthy" if milvus_status == "healthy" else "degraded",
         "service": "Flouds Vector",
-        "milvus": milvus_status
+        "milvus": milvus_status,
     }
 
 
@@ -94,7 +113,7 @@ def run_server():
     logger.info(
         f"Starting server: uvicorn on {APP_SETTINGS.server.host}:{APP_SETTINGS.server.port}"
     )
-    
+
     import uvicorn
 
     uvicorn.run(

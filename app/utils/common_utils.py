@@ -24,9 +24,19 @@ class CommonUtils:
 
     @staticmethod
     def parse_extra_fields(request, model_class):
-        # Get all fields defined in the model
-        model_fields = set(model_class.__fields__.keys())
-        # Convert request to dict (if it's a Pydantic model)
-        req_dict = request.dict() if hasattr(request, "dict") else dict(request)
+        # Get all fields defined in the model (Pydantic v2 compatibility)
+        if hasattr(model_class, "model_fields"):
+            model_fields = set(model_class.model_fields.keys())
+        else:
+            model_fields = set(model_class.__fields__.keys())
+
+        # Convert request to dict (Pydantic v2 compatibility)
+        if hasattr(request, "model_dump"):
+            req_dict = request.model_dump()
+        elif hasattr(request, "dict"):
+            req_dict = request.dict()
+        else:
+            req_dict = dict(request)
+
         # Extract extra fields
         return {k: v for k, v in req_dict.items() if k not in model_fields}

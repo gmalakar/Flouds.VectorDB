@@ -67,3 +67,8 @@ class SearchEmbeddedRequest(BaseRequest):
         ...,
         description="The vector to be searched in the vector store. This field is required.",
     )
+
+    text_filter: str = Field(
+        None,
+        description="Optional text filter to search within chunk content.",
+    )

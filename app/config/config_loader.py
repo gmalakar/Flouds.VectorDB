@@ -6,6 +6,7 @@
 
 import json
 import os
+from typing import Any, Dict
 
 from app.config.appsettings import AppSettings
 from app.logger import get_logger
@@ -14,36 +15,37 @@ logger = get_logger("config_loader")
 
 
 class ConfigLoader:
-    __appsettings = None
+    __appsettings: AppSettings = None
 
     @staticmethod
     def get_app_settings() -> AppSettings:
         """
         Loads AppSettings from appsettings.json and environment-specific override in the same folder.
         Performs a deep merge for nested config sections.
+        Applies environment variable overrides for key settings.
         """
         data = ConfigLoader._load_config_data("appsettings.json", True)
         ConfigLoader.__appsettings = AppSettings(**data)
-        # set isproduction
-        ConfigLoader.__appsettings.app.is_production = (
-            os.getenv("FLOUDS_API_ENV", "Production").lower() == "production"
-        )
+
+        # Apply environment variable overrides
+        env = os.getenv("FLOUDS_API_ENV", "Production").lower()
+        ConfigLoader.__appsettings.app.is_production = env == "production"
         ConfigLoader.__appsettings.server.port = int(
-            os.getenv("FLOUDS_PORT", ConfigLoader.__appsettings.server.port)
+            os.getenv("SERVER_PORT", ConfigLoader.__appsettings.server.port)
         )
         ConfigLoader.__appsettings.server.host = os.getenv(
-            "FLOUDS_HOST", ConfigLoader.__appsettings.server.host
+            "SERVER_HOST", ConfigLoader.__appsettings.server.host
         )
-        ConfigLoader.__appsettings.server.type = os.getenv(
-            "FLOUDS_SERVER_TYPE", ConfigLoader.__appsettings.server.type
-        )
-        ConfigLoader.__appsettings.app.debug = (
-            os.getenv("FLOUDS_DEBUG_MODE", "0") == "1"
-        )
+
+        ConfigLoader.__appsettings.app.debug = os.getenv("APP_DEBUG_MODE", "0") == "1"
+
+        logger.info(f"Loaded app settings for environment: {env}")
         return ConfigLoader.__appsettings
 
     @staticmethod
-    def _load_config_data(config_file_name: str, check_env_file: bool = False) -> dict:
+    def _load_config_data(
+        config_file_name: str, check_env_file: bool = False
+    ) -> Dict[str, Any]:
         """
         Loads a config file and merges with environment-specific override if present.
         Performs a deep merge for nested config sections.
@@ -53,7 +55,7 @@ class ConfigLoader:
 
         logger.debug(f"Loading config from {base_path}")
 
-        def deep_update(d, u):
+        def deep_update(d: Dict[str, Any], u: Dict[str, Any]):
             for k, v in u.items():
                 if isinstance(v, dict) and isinstance(d.get(k), dict):
                     deep_update(d[k], v)
@@ -61,6 +63,7 @@ class ConfigLoader:
                     d[k] = v
 
         if not os.path.exists(base_path):
+            logger.error(f"Config file not found: {base_path}")
             raise FileNotFoundError(f"Config file not found: {base_path}")
 
         with open(base_path, "r", encoding="utf-8") as f:
@@ -72,9 +75,12 @@ class ConfigLoader:
             name, ext = os.path.splitext(config_file_name)
             env_path = os.path.join(base_dir, f"{name}.{env.lower()}{ext}")
             if os.path.exists(env_path):
+                logger.info(f"Loading environment-specific config: {env_path}")
                 with open(env_path, "r", encoding="utf-8") as f:
                     env_data = json.load(f)
                 deep_update(data, env_data)
+            else:
+                logger.debug(f"No environment-specific config found for {env}")
 
         return data
 

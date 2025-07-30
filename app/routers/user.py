@@ -21,7 +21,18 @@ router = APIRouter()
 logger = get_logger("router")
 
 
-@router.post("/set_user", tags=["vector-store-users"], response_model=ListResponse)
+def log_response(response, operation: str):
+    """
+    Logs the response for a given operation.
+    """
+    logger.debug(f"{operation} response: {response.tenant_code} - {response.success}")
+    if not response.success:
+        logger.error(f"Error in {operation}: {response.message}")
+    else:
+        logger.info(f"{operation} successful for tenant: {response.tenant_code}")
+
+
+@router.post("/set_user", response_model=ListResponse)
 async def set_user(
     request: SetUserRequest, token: str = Depends(get_token)
 ) -> ListResponse:
@@ -34,25 +45,20 @@ async def set_user(
     Returns:
         ListResponse: The response with operation details.
     """
-    logger.debug(f"Vector store request set user for tenant: {request.tenant_code}")
+    logger.debug(f"set_user request for tenant: {request.tenant_code}")
+    extra_fields = CommonUtils.parse_extra_fields(request, SetUserRequest)
     response: ListResponse = await asyncio.to_thread(
         VectorStoreService.set_user,
         request,
         token=token,
-        **CommonUtils.parse_extra_fields(request, SetUserRequest),
+        **extra_fields,
     )
-    logger.debug(f"Vector store response: {response.tenant_code} - {response.success}")
-    if not response.success:
-        logger.error(f"Error in vector store operation: {response.message}")
-    else:
-        logger.info(
-            f"Vector store operation successful for tenant: {response.tenant_code}"
-        )
+    log_response(response, "set_user")
     return response
 
 
 @router.post(
-    "/reset_password", tags=["vector-store-users"], response_model=ResetPasswordResponse
+    "/reset_password", response_model=ResetPasswordResponse
 )
 async def reset_password(
     request: ResetPasswordRequest, token: str = Depends(get_token)
@@ -64,22 +70,15 @@ async def reset_password(
         request (ResetPasswordRequest): The request object containing tenant and token info.
 
     Returns:
-        ListResponse: The response with operation details.
+        ResetPasswordResponse: The response with operation details.
     """
-    logger.debug(
-        f"Vector store request reset password for tenant: {request.tenant_code}"
-    )
+    logger.debug(f"reset_password request for tenant: {request.tenant_code}")
+    extra_fields = CommonUtils.parse_extra_fields(request, ResetPasswordRequest)
     response: ResetPasswordResponse = await asyncio.to_thread(
         VectorStoreService.reset_password,
         request,
         token=token,
-        **CommonUtils.parse_extra_fields(request, ResetPasswordRequest),
+        **extra_fields,
     )
-    logger.debug(f"Vector store response: {response.tenant_code} - {response.success}")
-    if not response.success:
-        logger.error(f"Error in vector store operation: {response.message}")
-    else:
-        logger.info(
-            f"Vector store operation successful for tenant: {response.tenant_code}"
-        )
+    log_response(response, "reset_password")
     return response

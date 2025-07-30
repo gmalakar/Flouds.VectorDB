@@ -17,7 +17,6 @@ class AppConfig(BaseModel):
 
 
 class ServerConfig(BaseModel):
-    type: str = Field(default="uvicorn")
     host: str = Field(default="0.0.0.0")
     port: int = Field(default=5001)
 

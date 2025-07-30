@@ -1,5 +1,5 @@
 # =============================================================================
-# File: base_nlp_service.py
+# File: vector_store_service.py
 # Date: 2025-06-10
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
@@ -42,8 +42,8 @@ class VectorStoreService:
         Returns:
             ListResponse: The response with operation details.
         """
-        start_time: float = time.time()
-        response: ListResponse = ListResponse(
+        start_time = time.time()
+        response = ListResponse(
             tenant_code=request.tenant_code,
             success=True,
             message="User set successfully.",
@@ -59,11 +59,12 @@ class VectorStoreService:
         except Exception as e:
             response.success = False
             response.message = f"Error setting user: {str(e)}"
-            logger.exception("Unexpected error during user set operation")
+            logger.exception("Error during user set operation")
         finally:
-            elapsed: float = time.time() - start_time
-            logger.debug(f"User set operation completed in {elapsed:.2f} seconds.")
-            response.time_taken = elapsed
+            response.time_taken = time.time() - start_time
+            logger.debug(
+                f"User set operation completed in {response.time_taken:.2f} seconds."
+            )
             return response
 
     @classmethod
@@ -81,10 +82,10 @@ class VectorStoreService:
         Returns:
             ListResponse: The response with operation details.
         """
-        start_time: float = time.time()
-        response: ResetPasswordResponse = ResetPasswordResponse(
+        start_time = time.time()
+        response = ResetPasswordResponse(
             tenant_code=request.tenant_code,
-            user_name=request.user_name,  # Add this missing required field
+            user_name=request.user_name,
             success=False,
             message="Password reset failed.",
             time_taken=0.0,
@@ -101,13 +102,12 @@ class VectorStoreService:
         except Exception as e:
             response.success = False
             response.message = f"Error resetting password: {str(e)}"
-            logger.exception("Unexpected error during password reset operation")
+            logger.exception("Error during password reset operation")
         finally:
-            elapsed: float = time.time() - start_time
+            response.time_taken = time.time() - start_time
             logger.debug(
-                f"Password reset operation completed in {elapsed:.2f} seconds."
+                f"Password reset operation completed in {response.time_taken:.2f} seconds."
             )
-            response.time_taken = elapsed
             return response
 
     @classmethod
@@ -124,11 +124,11 @@ class VectorStoreService:
         Returns:
             ListResponse: The response with vector store details.
         """
-        start_time: float = time.time()
-        response: ListResponse = ListResponse(
+        start_time = time.time()
+        response = ListResponse(
             tenant_code=requests.tenant_code,
             success=True,
-            message="vector store set or retrieved successfully.",
+            message="Vector store set or retrieved successfully.",
             results={},
             time_taken=0.0,
         )
@@ -143,11 +143,12 @@ class VectorStoreService:
         except Exception as e:
             response.success = False
             response.message = f"Error generating vector store: {str(e)}"
-            logger.exception("Unexpected error during vector store operation")
+            logger.exception("Error during vector store operation")
         finally:
-            elapsed: float = time.time() - start_time
-            logger.debug(f"Vector store operation completed in {elapsed:.2f} seconds.")
-            response.time_taken = elapsed
+            response.time_taken = time.time() - start_time
+            logger.debug(
+                f"Vector store operation completed in {response.time_taken:.2f} seconds."
+            )
             return response
 
     @classmethod
@@ -164,16 +165,16 @@ class VectorStoreService:
         Returns:
             BaseResponse: The response with insertion details.
         """
-        start_time: float = time.time()
-        response: BaseResponse = BaseResponse(
+        start_time = time.time()
+        response = BaseResponse(
             tenant_code=requests.tenant_code,
             success=True,
             message="Vector store inserted successfully.",
             time_taken=0.0,
         )
         try:
-            logger.debug(f"vector store request: {requests.tenant_code}")
-            num_inserted: int = MilvusHelper.insert_embedded_data(
+            logger.debug(f"Insert request: {requests.tenant_code}")
+            num_inserted = MilvusHelper.insert_embedded_data(
                 request=requests,
                 token=token,
                 **kwargs,
@@ -188,11 +189,12 @@ class VectorStoreService:
         except Exception as e:
             response.success = False
             response.message = f"Error in inserting vector store: {str(e)}"
-            logger.exception("expected error during vector store operation")
+            logger.exception("Error during vector store insert operation")
         finally:
-            elapsed: float = time.time() - start_time
-            logger.debug(f"insert operation completed in {elapsed:.2f} seconds.")
-            response.time_taken = elapsed
+            response.time_taken = time.time() - start_time
+            logger.debug(
+                f"Insert operation completed in {response.time_taken:.2f} seconds."
+            )
             return response
 
     @classmethod
@@ -209,8 +211,8 @@ class VectorStoreService:
         Returns:
             BaseResponse: The response with search details.
         """
-        start_time: float = time.time()
-        response: SearchEmbeddedResponse = SearchEmbeddedResponse(
+        start_time = time.time()
+        response = SearchEmbeddedResponse(
             tenant_code=requests.tenant_code,
             model=requests.model,
             limit=requests.limit,
@@ -222,10 +224,10 @@ class VectorStoreService:
             success=True,
             message="Vector store search completed successfully.",
             time_taken=0.0,
-            data=[],  # <-- Add this line!
+            data=[],
         )
         try:
-            logger.debug(f"vector store request: {requests.tenant_code}")
+            logger.debug(f"Search request: {requests.tenant_code}")
             search_results = MilvusHelper.search_embedded_data(
                 request=requests,
                 token=token,
@@ -235,14 +237,13 @@ class VectorStoreService:
             if not search_results:
                 response.success = False
                 response.message = "No vectors found in the vector store."
-            else:
-                response.success = True
         except Exception as e:
             response.success = False
             response.message = f"Error in searching vector store: {str(e)}"
-            logger.exception("expected error during vector store operation")
+            logger.exception("Error during vector store search operation")
         finally:
-            elapsed: float = time.time() - start_time
-            logger.debug(f"search operation completed in {elapsed:.2f} seconds.")
-            response.time_taken = elapsed
+            response.time_taken = time.time() - start_time
+            logger.debug(
+                f"Search operation completed in {response.time_taken:.2f} seconds."
+            )
             return response

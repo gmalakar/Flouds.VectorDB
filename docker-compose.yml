@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  milvus:
+    image: milvusdb/milvus:latest
+    container_name: milvus-standalone
+    ports:
+      - "19530:19530"
+    environment:
+      - ETCD_ENDPOINTS=etcd:2379
+      - MINIO_ADDRESS=minio:9000
+    volumes:
+      - milvus_data:/var/lib/milvus
+    depends_on:
+      - etcd
+      - minio
+    networks:
+      - milvus_network
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.0
+    container_name: milvus-etcd
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+    volumes:
+      - etcd_data:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    networks:
+      - milvus_network
+
+  minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: milvus-minio
+    environment:
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    ports:
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: minio server /data --console-address ":9001"
+    networks:
+      - milvus_network
+
+  flouds-vector:
+    build: .
+    container_name: flouds-vector-api
+    ports:
+      - "19680:19680"
+    environment:
+      - VECTORDB_ENDPOINT=milvus
+      - VECTORDB_PORT=19530
+      - VECTORDB_USERNAME=root
+      - VECTORDB_PASSWORD=Milvus
+    depends_on:
+      - milvus
+    networks:
+      - milvus_network
+      - flouds_vector_network
+
+volumes:
+  milvus_data:
+  etcd_data:
+  minio_data:
+
+networks:
+  milvus_network:
+    driver: bridge
+  flouds_vector_network:
+    driver: bridge

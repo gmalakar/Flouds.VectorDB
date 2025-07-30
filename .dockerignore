@@ -1,14 +1,15 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *.so
 *.pyd
+*.pyo
 
 # Environment files
 .env*
 *.env*
 
-# Development configuration files
+# Configuration files (keep only production config)
 appsettings.development.json
 appsettings.*.json
 !appsettings.json
@@ -20,12 +21,14 @@ logs/
 coverage.*
 htmlcov/
 .tox/
+.coverage
 
 # IDE/editor folders
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
 # Virtual environments
 venv/
@@ -47,36 +50,30 @@ dist/
 .eggs/
 *.whl
 
-# Docker files
+# Docker files (don't include in image)
 Dockerfile*
 .dockerignore
 docker-compose*.yml
 
-# Scripts and documentation
+# Documentation and scripts
 *.md
 *.ps1
+*.sh
+*.bat
 LICENSE*
+CONTRIBUTING.md
+SECURITY.md
 
-# Data, models, and cache
-onnx/
-*.onnx
-*.pb
-*.tflite
-*.mlmodel
-*.hdf5 
-*.ckpt
-*.pth
-*.pt
-*.pkl
-*.pkl.gz
-*.tar.gz
-data/
-*.h5
-*.h5py
-*.model
-*.weights
-*.bin
-*.npz
+# Development files
+tests/
+test_*/
+*_test.py
+requirements-dev.txt
+.pre-commit-config.yaml
+.github/
+
+# Milvus standalone files
+milvus/
 
 # OS-specific
 .DS_Store
@@ -85,16 +82,7 @@ ehthumbs.db
 Icon?
 desktop.ini
 
-# Jupyter and notebooks
-.ipynb_checkpoints/
-*.ipynb
-
 # Temporary files
 *.tmp
 *.bak
 *.old
-
-# Tests
-tests/
-test_*/
-*_test.py

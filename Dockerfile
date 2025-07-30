@@ -3,7 +3,7 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     FLOUDS_API_ENV=Production \
-    FLOUDS_DEBUG_MODE=0 \
+    APP_DEBUG_MODE=0 \
     FLOUDS_LOG_PATH=/flouds-vector/logs \
     FLOUDS_APP_SECRETS=/flouds-vector/secrets \
     PIP_NO_CACHE_DIR=1 \
@@ -34,5 +34,9 @@ RUN mkdir -p $FLOUDS_APP_SECRETS $FLOUDS_LOG_PATH && \
     chmod 777 $FLOUDS_LOG_PATH
 
 EXPOSE 19680
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:19680/health || exit 1
 
 CMD ["python", "-m", "app.main"]

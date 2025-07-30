@@ -227,7 +227,7 @@ $dockerArgs += @(
     "--network", $floudsVectorNetwork,
     "-p", "${Port}:${Port}",
     "-e", "FLOUDS_API_ENV=Production",
-    "-e", "FLOUDS_DEBUG_MODE=0"
+    "-e", "APP_DEBUG_MODE=0"
 )
 
 foreach ($key in @("VECTORDB_ENDPOINT", "VECTORDB_PORT", "VECTORDB_USERNAME", "VECTORDB_NETWORK")) {

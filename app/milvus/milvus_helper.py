@@ -11,7 +11,7 @@ from app.app_init import APP_SETTINGS
 from app.logger import get_logger
 from app.milvus.base_milvus import BaseMilvus
 from app.milvus.vector_store import VectorStore
-from app.models.embeded_meta import EmbeddedMeta
+from app.models.embedded_meta import EmbeddedMeta
 from app.models.insert_request import InsertEmbeddedRequest
 from app.models.reset_password_request import ResetPasswordRequest
 from app.models.reset_password_response import ResetPasswordResponse
@@ -23,23 +23,29 @@ logger = get_logger("milvus_helper")
 
 
 class MilvusHelper(BaseMilvus):
+    """
+    Helper class for Milvus operations, providing thread-safe initialization,
+    vector store management, and user/password operations for multi-tenant environments.
+    """
+
     __mhelper_init_lock: Lock = Lock()
     __mhelper_initialized: bool = False
     __vector_stores: ConcurrentDict = ConcurrentDict("_vector_stores")
 
     def __init__(self) -> None:
         logger.debug("Initializing MilvusHelper...")
-        super().__init__()  # HINT: This calls BaseMilvus.__init__()
+        super().__init__()
 
     @classmethod
     def initialize(cls, **kwargs: Any) -> None:
         """
         Initializes the Milvus admin client and sets configuration.
+        Thread-safe.
         """
         with cls.__mhelper_init_lock:
             if not cls.__mhelper_initialized:
                 try:
-                    cls()  # HINT: This will call __init__ and thus BaseMilvus.__init__()
+                    cls()
                     BaseMilvus._set_admin_role_if_not_exists()
                     logger.debug("MilvusHelper initialized successfully.")
                 except Exception as ex:
@@ -55,14 +61,18 @@ class MilvusHelper(BaseMilvus):
     ) -> int:
         """
         Inserts embedded vectors into the tenant's vector store.
+
+        Returns:
+            int: Number of vectors inserted.
+        Raises:
+            ValueError: If token is invalid.
         """
         client_id, secret_key = MilvusHelper._split_token(token)
-        valid_token = BaseMilvus._validate_token(token=token)
-        if not valid_token:
+        if not BaseMilvus._validate_token(token=token):
             logger.error(f"Invalid token: {token}")
             raise ValueError("Invalid token.")
 
-        tenant_store: VectorStore = MilvusHelper.__get_or_add_current_volumes(
+        tenant_store = MilvusHelper.__get_or_add_current_volumes(
             request.tenant_code, client_id, secret_key
         )
         logger.debug(
@@ -77,32 +87,40 @@ class MilvusHelper(BaseMilvus):
     ) -> List[EmbeddedMeta]:
         """
         Searches for embedded data in the tenant's vector store.
+
+        Returns:
+            List[EmbeddedMeta]: Search results.
+        Raises:
+            ValueError: If token is invalid.
         """
         client_id, secret_key = MilvusHelper._split_token(token)
-        valid_token = BaseMilvus._validate_token(token=token)
-        if not valid_token:
+        if not BaseMilvus._validate_token(token=token):
             logger.error(f"Invalid token: {token}")
             raise ValueError("Invalid token.")
 
-        tenant_store: VectorStore = MilvusHelper.__get_or_add_current_volumes(
+        tenant_store = MilvusHelper.__get_or_add_current_volumes(
             request.tenant_code, client_id, secret_key
         )
-        return tenant_store.search_store(request=request, kwargs=kwargs)
+        return tenant_store.search_store(request=request, **kwargs)
 
     @staticmethod
     def set_user(request: SetUserRequest, token: str, **kwargs: Any) -> dict:
         """
         Sets up a user for a tenant, creating all necessary resources if missing.
-        Uses a lock to ensure thread safety.
+        Only super users can perform this operation.
+
+        Returns:
+            dict: Summary of user setup.
+        Raises:
+            ValueError: If token is invalid.
+            PermissionError: If user is not a super user.
         """
         client_id, secret_key = MilvusHelper._split_token(token)
         logger.debug(f"Setting up user for tenant '{request.tenant_code}'")
-        valid_token = BaseMilvus._validate_token(token=token)
-        if not valid_token:
+        if not BaseMilvus._validate_token(token=token):
             logger.error(f"Invalid token: {token}")
             raise ValueError("Invalid token.")
-        super_user = BaseMilvus._is_super_user(user_id=client_id)
-        if not super_user:
+        if not BaseMilvus._is_super_user(user_id=client_id):
             logger.error(f"User '{client_id}' is not a super user.")
             raise PermissionError("User is not a super user to perform this operation.")
 
@@ -119,16 +137,20 @@ class MilvusHelper(BaseMilvus):
     ) -> ResetPasswordResponse:
         """
         Resets the password for a user in a tenant.
-        Uses a lock to ensure thread safety.
+        Only super users can perform this operation.
+
+        Returns:
+            ResetPasswordResponse: Password reset result.
+        Raises:
+            ValueError: If token is invalid.
+            PermissionError: If user is not a super user.
         """
         client_id, secret_key = MilvusHelper._split_token(token)
-        logger.debug(f"Setting up user for tenant '{request.tenant_code}'")
-        valid_token = BaseMilvus._validate_token(token=token)
-        if not valid_token:
+        logger.debug(f"Resetting password for tenant '{request.tenant_code}'")
+        if not BaseMilvus._validate_token(token=token):
             logger.error(f"Invalid token: {token}")
             raise ValueError("Invalid token.")
-        super_user = BaseMilvus._is_super_user(user_id=client_id)
-        if not super_user:
+        if not BaseMilvus._is_super_user(user_id=client_id):
             logger.error(f"User '{client_id}' is not a super user.")
             raise PermissionError("User is not a super user to perform this operation.")
 
@@ -141,9 +163,14 @@ class MilvusHelper(BaseMilvus):
     def _split_token(token: str) -> Tuple[str, str]:
         """
         Splits a token into user_id and password.
+
+        Returns:
+            Tuple[str, str]: (user_id, password)
+        Raises:
+            ValueError: If token format is invalid.
         """
         try:
-            user_id, password = token.split(":", 1)  # Split at the first colon
+            user_id, password = token.split(":", 1)
             return user_id, password
         except ValueError:
             raise ValueError("Invalid token format. Expected 'user_id:password'.")
@@ -155,15 +182,8 @@ class MilvusHelper(BaseMilvus):
         """
         Sets up a vector store for a tenant, creating all necessary resources if missing.
 
-        Args:
-            tenant_code (str): The tenant identifier.
-            vector_dimension (int): The dimension of the vector store.
-            token (str): The authentication token.
-            **kwargs: Additional keyword arguments.
-
         Returns:
             dict[str, Any]: Summary of the setup operation.
-
         Raises:
             ValueError: If the token or tenant_code is invalid.
             PermissionError: If the user is not a super user.
@@ -171,18 +191,16 @@ class MilvusHelper(BaseMilvus):
         """
         client_id, secret_key = MilvusHelper._split_token(token)
         logger.debug(
-            f"Setting up vector store for tenant '{tenant_code}' with client_id '{client_id}' and secret_key '{secret_key}'."
+            f"Setting up vector store for tenant '{tenant_code}' with client_id '{client_id}'."
         )
-        valid_token = BaseMilvus._validate_token(token=token)
-        if not valid_token:
+        if not BaseMilvus._validate_token(token=token):
             logger.error(f"Invalid token: {token}")
             raise ValueError("Invalid token.")
-        super_user = BaseMilvus._is_super_user(user_id=client_id)
-        if not super_user:
+        if not BaseMilvus._is_super_user(user_id=client_id):
             logger.error(f"User '{client_id}' is not a super user.")
             raise PermissionError("User is not a super user.")
 
-        with MilvusHelper.__mhelper_init_lock:  # HINT: Lock to avoid race condition during vector store setup
+        with MilvusHelper.__mhelper_init_lock:
             if not MilvusHelper.__mhelper_initialized:
                 logger.error(
                     "MilvusHelper has not been initialized. Please call initialize() first."
@@ -193,13 +211,7 @@ class MilvusHelper(BaseMilvus):
             if not tenant_code:
                 logger.error("tenant_code is required.")
                 raise ValueError("tenant_code is required.")
-            # HINT: Create user if not exists
-            # BaseMilvus._create_user_if_not_exists(client_id, secret_key)
 
-            # setup tenant store
-            logger.debug(
-                f"Setting up vector store for tenant '{tenant_code}' with client_id '{client_id}'."
-            )
             return BaseMilvus._setup_tenant_vector_store(
                 tenant_code=tenant_code, vector_dimension=vector_dimension, **kwargs
             )
@@ -210,6 +222,9 @@ class MilvusHelper(BaseMilvus):
     ) -> VectorStore:
         """
         Gets or creates a VectorStore instance for the given tenant/user.
+
+        Returns:
+            VectorStore: The vector store instance.
         """
         return MilvusHelper.__vector_stores.get_or_add(
             (tenant_id, user_id), lambda: VectorStore(tenant_id, user_id, password)
