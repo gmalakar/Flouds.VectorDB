@@ -317,7 +317,7 @@ This includes:
 **When to use which:**
 - **PowerShell scripts**: Production deployment to existing Milvus infrastructure
 - **Docker Compose**: Local development, testing, or complete stack deployment
-- **Manual Docker**: Custom deployments, CI/CD pipelines, or Kubernetes
+- **Manual Docker**: Custom deployments or Kubernetes
 
 ### Environment Variables
 
@@ -388,7 +388,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and [SECURITY.
 - **API versioning** for backward compatibility
 - **Environment-based configuration** (Development/Production)
 - **Docker containerization** with multi-stage builds
-- **CI/CD pipeline** with automated testing
 - **Thread-safe architecture** for concurrent operations
 
 ### Key Notes
