@@ -260,7 +260,7 @@ class BaseMilvus:
                     f"Admin role '{APP_SETTINGS.vectordb.admin_role_name}' created successfully."
                 )
                 BaseMilvus.__assign_role_to_user(
-                    user_name=APP_SETTINGS.vectordb.admin_role_name,
+                    user_name=APP_SETTINGS.vectordb.username,
                     role_name=APP_SETTINGS.vectordb.admin_role_name,
                 )
                 # This gives full access across all collections and databases.

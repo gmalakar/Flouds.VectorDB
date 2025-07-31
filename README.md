@@ -1,6 +1,6 @@
-# FloudsVectors.Py
+# Flouds.VectorDB
 
-FloudsVectors.Py is a FastAPI-based service for managing multi-tenant vector stores using Milvus as the backend. It provides APIs for creating tenants, managing users, and storing and searching vector embeddings with metadata.
+Flouds.VectorDB is a FastAPI-based service for managing multi-tenant vector stores using Milvus as the backend. It provides APIs for creating tenants, managing users, and storing and searching vector embeddings with metadata.
 
 **This is a new project and we are looking for collaborators!**  
 If you are interested in vector databases, FastAPI, or scalable backend systems, your contributions are welcome.
@@ -53,7 +53,7 @@ You can set server type, host, port, logging, and Milvus options.
 ```json
 {
   "app": {
-    "name": "FloudsVectors.Py"
+    "name": "Flouds.VectorDB"
   },
   "server": {
     "host": "0.0.0.0",
@@ -256,7 +256,7 @@ curl -X POST http://localhost:19680/api/v1/vector_store_users/set_user \
 
 ## Docker Usage
 
-FloudsVectors.Py is available as a pre-built image on [Docker Hub](https://hub.docker.com/r/gmalakar/flouds-vector).
+Flouds.VectorDB is available as a pre-built image on [Docker Hub](https://hub.docker.com/r/gmalakar/flouds-vector).
 
 ### Option 1: Production Deployment (Recommended)
 

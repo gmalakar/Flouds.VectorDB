@@ -57,9 +57,7 @@ async def set_user(
     return response
 
 
-@router.post(
-    "/reset_password", response_model=ResetPasswordResponse
-)
+@router.post("/reset_password", response_model=ResetPasswordResponse)
 async def reset_password(
     request: ResetPasswordRequest, token: str = Depends(get_token)
 ) -> ResetPasswordResponse:

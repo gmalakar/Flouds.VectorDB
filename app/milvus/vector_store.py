@@ -152,9 +152,12 @@ class VectorStore(BaseMilvus):
         Returns a list of EmbeddedMeta results.
         Thread-safe.
         """
-        if not self.__set_collection():
-            raise Exception(f"Failed to set collection for {self._store_name}")
-        results: List[EmbeddedMeta] = []
+        # Only lock for collection setup, not the entire search
+        if not self._has_collection:
+            with self._lock:
+                if not self._has_collection and not self.__set_collection():
+                    raise Exception(f"Failed to set collection for {self._store_name}")
+
         client = self._get_tenant_client()
 
         vector_field_name = BaseMilvus._get_vector_field_name()
@@ -194,17 +197,17 @@ class VectorStore(BaseMilvus):
         # Fast result processing
         filtered_results = []
         score_threshold = getattr(request, "score_threshold", None)
-        
+
         if result and len(result) > 0:
             hits = result[0]
             for hit in hits:
                 if score_threshold is not None and hit.score < score_threshold:
                     continue
-                
+
                 chunk = hit.entity.get("chunk")
                 if not chunk:
                     continue
-                    
+
                 meta = hit.entity.get("meta", "{}")
                 if request.meta_required:
                     parsed_meta = self._parse_meta(meta)
@@ -213,7 +216,7 @@ class VectorStore(BaseMilvus):
                     meta = parsed_meta
                 else:
                     meta = self._parse_meta(meta) if isinstance(meta, str) else meta
-                
+
                 filtered_results.append(EmbeddedMeta(content=chunk, meta=meta))
 
         logger.debug(
@@ -237,33 +240,32 @@ class VectorStore(BaseMilvus):
         """
         Ensures the collection for this tenant exists and is loaded.
         Creates the collection and index if missing.
-        Thread-safe.
+        Note: This method should be called within a lock context.
         """
-        with self._lock:
-            try:
-                client = self._get_tenant_client()
-                if client.has_collection(self._store_name):
-                    logger.info(f"Vector store '{self._store_name}' already exists.")
-                    if not self._has_index:
-                        BaseMilvus._create_vector_store_index_if_not_exists(
-                            self._store_name, self._tenant_code
-                        )
-                        self._has_index = True
-                    client.load_collection(self._store_name)
-                    logger.info(f"Vector store '{self._store_name}' loaded.")
-                    self._has_collection = True
-                else:
-                    logger.info(
-                        f"Vector store '{self._store_name}' does not exist. Creating it."
+        try:
+            client = self._get_tenant_client()
+            if client.has_collection(self._store_name):
+                logger.info(f"Vector store '{self._store_name}' already exists.")
+                if not self._has_index:
+                    BaseMilvus._create_vector_store_index_if_not_exists(
+                        self._store_name, self._tenant_code
                     )
-                    BaseMilvus._setup_tenant_vector_store(
-                        tenant_code=self._tenant_code,
-                        user_id=self._user_id,
-                        vector_dimension=self._vector_dimension,
-                    )
-                    self._has_collection = True
                     self._has_index = True
-                return True
-            except Exception as ex:
-                logger.error(f"Error in _set_collection for '{self._store_name}': {ex}")
-                raise
+                client.load_collection(self._store_name)
+                logger.info(f"Vector store '{self._store_name}' loaded.")
+                self._has_collection = True
+            else:
+                logger.info(
+                    f"Vector store '{self._store_name}' does not exist. Creating it."
+                )
+                BaseMilvus._setup_tenant_vector_store(
+                    tenant_code=self._tenant_code,
+                    user_id=self._user_id,
+                    vector_dimension=self._vector_dimension,
+                )
+                self._has_collection = True
+                self._has_index = True
+            return True
+        except Exception as ex:
+            logger.error(f"Error in _set_collection for '{self._store_name}': {ex}")
+            raise

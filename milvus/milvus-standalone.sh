@@ -17,7 +17,7 @@ if [[ -z "$COMMAND" ]]; then
     exit 1
 fi
 
-if [[ "$COMMAND" == "start" || "$COMMAND" == "restart" ]]; then
+if [[ "$COMMAND" == "start" || "$COMMAND" == "restart" || "$COMMAND" == "remove" || "$COMMAND" == "delete" ]]; then
     if [[ -z "$CONFIG_PATH" || -z "$DATA_PATH" ]]; then
         echo "ERROR: You must provide both config and data paths for '$COMMAND'."
         echo "Usage: $0 $COMMAND [config-path] [data-path]"
@@ -151,20 +151,34 @@ delete_container() {
     echo "✓ Milvus container deleted."
 }
 
-delete() {
+remove() {
     delete_container
-    if [[ -n "$CONFIG_PATH" ]]; then
-        echo "Cleaning up config files in $CONFIG_PATH..."
-        rm -f "$ETCD_CONFIG"
-        rm -f "$USER_CONFIG"
-        echo "✓ Configuration files cleaned"
+    echo "✓ Container removed, data preserved"
+}
+
+delete() {
+    echo "WARNING: This will permanently delete all Milvus data and configuration files!"
+    echo "Data path: $DATA_PATH"
+    echo "Config files: $ETCD_CONFIG, $USER_CONFIG"
+    read -p "Are you sure you want to continue? (yes/no): " confirmation
+    
+    if [[ "$confirmation" == "yes" ]]; then
+        delete_container
+        if [[ -n "$CONFIG_PATH" ]]; then
+            echo "Cleaning up config files in $CONFIG_PATH..."
+            rm -f "$ETCD_CONFIG"
+            rm -f "$USER_CONFIG"
+            echo "✓ Configuration files cleaned"
+        fi
+        if [[ -n "$DATA_PATH" ]]; then
+            echo "Cleaning up data in $DATA_PATH..."
+            rm -rf "$DATA_PATH/volumes"
+            echo "✓ Data files cleaned"
+        fi
+        echo "✓ Deleted all Milvus data and configs"
+    else
+        echo "Delete operation cancelled"
     fi
-    if [[ -n "$DATA_PATH" ]]; then
-        echo "Cleaning up data in $DATA_PATH..."
-        rm -rf "$DATA_PATH/volumes"
-        echo "✓ Data files cleaned"
-    fi
-    echo "✓ Deleted all Milvus data and configs."
 }
 
 case "$COMMAND" in
@@ -177,6 +191,9 @@ case "$COMMAND" in
     restart)
         stop
         start
+        ;;
+    remove)
+        remove
         ;;
     delete)
         delete

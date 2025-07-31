@@ -19,13 +19,12 @@ if /i "%COMMAND%"=="start" (
     call :validate_paths
 ) else if /i "%COMMAND%"=="restart" (
     call :validate_paths
+) else if /i "%COMMAND%"=="remove" (
+    call :validate_paths
 ) else if /i "%COMMAND%"=="delete" (
     call :validate_paths
 ) else if /i "%COMMAND%"=="stop" (
-    if "%CONFIG_PATH%"=="" (
-        call :show_usage "You must provide a config path for the 'stop' command"
-        exit /b 1
-    )
+    rem No parameters required for stop
 ) else (
     call :show_usage "Unknown command: %COMMAND%"
     exit /b 1
@@ -46,6 +45,8 @@ if /i "%COMMAND%"=="restart" (
     call :start
 ) else if /i "%COMMAND%"=="stop" (
     call :stop
+) else if /i "%COMMAND%"=="remove" (
+    call :remove
 ) else if /i "%COMMAND%"=="delete" (
     call :delete
 )
@@ -54,9 +55,11 @@ exit /b 0
 :: -------------------------------
 :show_usage
 echo  ERROR: %~1
-echo Usage: milvus-standalone.bat start^|stop^|restart^|delete [config-path] [data-root-path]
-echo   - start/restart/delete: require both config-path and data-root-path
-echo   - stop: requires only config-path
+echo Usage: milvus-standalone.bat start^|stop^|restart^|remove^|delete [config-path] [data-root-path]
+echo   - start/restart/remove/delete: require both config-path and data-root-path
+echo   - stop: no parameters required
+echo   - remove: removes container only, preserves data
+echo   - delete: removes container and all data (requires confirmation)
 goto :eof
 
 :: -------------------------------
@@ -230,18 +233,32 @@ echo  ✓ Milvus container deleted
 goto :eof
 
 :: -------------------------------
-:delete
+:remove
 call :delete_container
-if not "%CONFIG_PATH%"=="" (
-    echo  Cleaning up files in %CONFIG_PATH%...
-    if exist "%ETCD_CONFIG%" del /q "%ETCD_CONFIG%" 2>nul
-    if exist "%USER_CONFIG%" del /q "%USER_CONFIG%" 2>nul
-    echo  ✓ Configuration files cleaned
+echo  ✓ Container removed, data preserved
+goto :eof
+
+:: -------------------------------
+:delete
+echo  WARNING: This will permanently delete all Milvus data and configuration files!
+echo  Data path: %DATA_PATH%\volumes
+echo  Config files: %ETCD_CONFIG%, %USER_CONFIG%
+set /p "confirmation=Are you sure you want to continue? (yes/no): "
+if /i "%confirmation%"=="yes" (
+    call :delete_container
+    if not "%CONFIG_PATH%"=="" (
+        echo  Cleaning up files in %CONFIG_PATH%...
+        if exist "%ETCD_CONFIG%" del /q "%ETCD_CONFIG%" 2>nul
+        if exist "%USER_CONFIG%" del /q "%USER_CONFIG%" 2>nul
+        echo  ✓ Configuration files cleaned
+    )
+    if not "%DATA_PATH%"=="" (
+        echo  Cleaning up files in %DATA_PATH%\volumes...
+        if exist "%DATA_PATH%\volumes" rmdir /s /q "%DATA_PATH%\volumes" 2>nul
+        echo  ✓ Data files cleaned
+    )
+    echo  ✓ Deleted all Milvus data and configs
+) else (
+    echo  Delete operation cancelled
 )
-if not "%DATA_PATH%"=="" (
-    echo  Cleaning up files in %DATA_PATH%\volumes...
-    if exist "%DATA_PATH%\volumes" rmdir /s /q "%DATA_PATH%\volumes" 2>nul
-    echo  ✓ Data files cleaned
-)
-echo  ✓ Deleted all Milvus data and configs
 goto :eof
