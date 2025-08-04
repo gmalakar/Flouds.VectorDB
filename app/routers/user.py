@@ -16,6 +16,7 @@ from app.models.reset_password_response import ResetPasswordResponse
 from app.models.set_user_request import SetUserRequest
 from app.services.vector_store_service import VectorStoreService
 from app.utils.common_utils import CommonUtils
+from app.utils.log_sanitizer import sanitize_for_log
 
 router = APIRouter()
 logger = get_logger("router")
@@ -25,11 +26,15 @@ def log_response(response, operation: str):
     """
     Logs the response for a given operation.
     """
-    logger.debug(f"{operation} response: {response.tenant_code} - {response.success}")
+    logger.debug(
+        f"{operation} response: {sanitize_for_log(response.tenant_code)} - {response.success}"
+    )
     if not response.success:
         logger.error(f"Error in {operation}: {response.message}")
     else:
-        logger.info(f"{operation} successful for tenant: {response.tenant_code}")
+        logger.info(
+            f"{operation} successful for tenant: {sanitize_for_log(response.tenant_code)}"
+        )
 
 
 @router.post("/set_user", response_model=ListResponse)
@@ -45,7 +50,9 @@ async def set_user(
     Returns:
         ListResponse: The response with operation details.
     """
-    logger.debug(f"set_user request for tenant: {request.tenant_code}")
+    logger.debug(
+        f"set_user request for tenant: {sanitize_for_log(request.tenant_code)}"
+    )
     extra_fields = CommonUtils.parse_extra_fields(request, SetUserRequest)
     response: ListResponse = await asyncio.to_thread(
         VectorStoreService.set_user,
@@ -70,7 +77,9 @@ async def reset_password(
     Returns:
         ResetPasswordResponse: The response with operation details.
     """
-    logger.debug(f"reset_password request for tenant: {request.tenant_code}")
+    logger.debug(
+        f"reset_password request for tenant: {sanitize_for_log(request.tenant_code)}"
+    )
     extra_fields = CommonUtils.parse_extra_fields(request, ResetPasswordRequest)
     response: ResetPasswordResponse = await asyncio.to_thread(
         VectorStoreService.reset_password,

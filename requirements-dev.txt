@@ -1,4 +1,5 @@
 # Development dependencies
+# Install with: pip install -r requirements-dev.txt
 -r app/requirements.txt
 pytest>=8.3.0
 pytest-cov>=6.0.0

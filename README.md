@@ -11,6 +11,11 @@ If you are interested in vector databases, FastAPI, or scalable backend systems,
 
 - **Multi-tenant vector store management** with complete data isolation
 - **User and role management** for each tenant with authentication
+- **Hybrid search capabilities** combining dense and sparse vectors
+- **Dense vector search** for semantic similarity using COSINE/L2/IP metrics
+- **Sparse vector search** using BM25 for keyword-based matching
+- **Reciprocal Rank Fusion (RRF)** for intelligent result combination
+- **Advanced text filtering** with stop word handling and minimum word matching
 - **Insert and search vector embeddings** with metadata support
 - **RESTful API endpoints** with OpenAPI documentation
 - **Milvus vector database backend** for high-performance similarity search
@@ -63,7 +68,7 @@ You can set server type, host, port, logging, and Milvus options.
     "endpoint": "http://localhost",
     "port": 19530,
     "username": "root",
-    "password": "Milvus",
+    "password": "<your_milvus_password>",
     "default_dimension": 384,
     "admin_role_name": "flouds_admin_role",
     "primary_key": "flouds_vector_id",
@@ -145,7 +150,7 @@ cp .env.example .env
 FLOUDS_API_ENV=Development
 APP_DEBUG_MODE=1
 VECTORDB_USERNAME=root
-VECTORDB_PASSWORD=Milvus
+VECTORDB_PASSWORD=<your_milvus_password>
 VECTORDB_ENDPOINT=localhost
 VECTORDB_PORT=19530
 VECTORDB_NETWORK=milvus_network
@@ -166,6 +171,7 @@ All endpoints are versioned under `/api/v1/` and require authentication via `Aut
 ### Vector Store Operations
 
 - `POST /api/v1/vector_store/set_vector_store` - Create or retrieve a vector store for a tenant
+- `POST /api/v1/vector_store/generate_schema` - Generate custom schema for tenant with specific parameters
 - `POST /api/v1/vector_store/insert` - Insert embedded vectors with metadata
 - `POST /api/v1/vector_store/search` - Search for similar vectors using cosine/L2 similarity
 
@@ -200,12 +206,28 @@ curl -X POST http://localhost:19680/api/v1/vector_store/set_vector_store \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer admin:admin_password" \
   -d '{
-    "tenant_code": "mytenant",
-    "vector_dimension": 384
+    "tenant_code": "mytenant"
   }'
 ```
 
-### 3. Insert Embedded Vectors
+### 3. Generate Custom Schema
+
+```sh
+curl -X POST http://localhost:19680/api/v1/vector_store/generate_schema \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer admin:admin_password" \
+  -d '{
+    "tenant_code": "mytenant",
+    "model_name": "sentence-transformers",
+    "dimension": 384,
+    "metric_type": "COSINE",
+    "index_type": "IVF_FLAT",
+    "nlist": 1024,
+    "metadata_length": 4096
+  }'
+```
+
+### 4. Insert Embedded Vectors
 
 ```sh
 curl -X POST http://localhost:19680/api/v1/vector_store/insert \
@@ -225,7 +247,7 @@ curl -X POST http://localhost:19680/api/v1/vector_store/insert \
   }'
 ```
 
-### 4. Search Embedded Vectors
+### 5. Search Embedded Vectors (Dense Search)
 
 ```sh
 curl -X POST http://localhost:19680/api/v1/vector_store/search \
@@ -237,11 +259,32 @@ curl -X POST http://localhost:19680/api/v1/vector_store/search \
     "limit": 10,
     "score_threshold": 0.0,
     "metric_type": "COSINE",
+    "hybrid_search": false,
     "vector": [0.1, 0.2, 0.3, ...]
   }'
 ```
 
-### 5. Create or Set a User
+### 6. Hybrid Search (Dense + Sparse)
+
+```sh
+curl -X POST http://localhost:19680/api/v1/vector_store/search \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer user:password" \
+  -d '{
+    "tenant_code": "mytenant",
+    "model": "sentence-transformers",
+    "limit": 10,
+    "score_threshold": 0.0,
+    "metric_type": "COSINE",
+    "hybrid_search": true,
+    "text_filter": "invoice billed to customer",
+    "minimum_words_match": 2,
+    "include_stop_words": false,
+    "vector": [0.1, 0.2, 0.3, ...]
+  }'
+```
+
+### 7. Create or Set a User
 
 ```sh
 curl -X POST http://localhost:19680/api/v1/vector_store_users/set_user \
@@ -327,7 +370,7 @@ Key configuration options:
 VECTORDB_ENDPOINT=localhost
 VECTORDB_PORT=19530
 VECTORDB_USERNAME=root
-VECTORDB_PASSWORD=Milvus
+VECTORDB_PASSWORD=<your_milvus_password>
 VECTORDB_NETWORK=milvus_network
 
 # Security (alternative to password)
@@ -377,6 +420,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and [SECURITY.
 - **Multi-tenant isolation** with role-based access control
 - **Rate limiting** (100 requests/minute per IP)
 - **CORS support** for web frontend integration
+- **Enhanced exception handling** with custom exception classes
+- **Input sanitization** for XSS prevention
+- **Optimized performance** with improved algorithms
 
 ### Monitoring & Observability
 - **Health checks** with Milvus connectivity status
@@ -390,9 +436,46 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and [SECURITY.
 - **Docker containerization** with multi-stage builds
 - **Thread-safe architecture** for concurrent operations
 
+### Security & Code Quality Improvements
+
+#### ✅ **Recently Implemented**
+- **Custom Exception Handling**: 13 specific exception classes for better error categorization
+- **XSS Prevention**: Input sanitization in password policy error messages
+- **Performance Optimization**: Optimized RRF (Reciprocal Rank Fusion) algorithm
+- **Import Optimization**: Specific imports instead of broad imports for better performance
+- **Thread-Safe Architecture**: Improved concurrent operation handling
+
+#### ⚠️ **Security Issues Requiring Attention**
+- **Log Injection**: Multiple files need `sanitize_for_log()` for user inputs in logs
+- **Path Traversal**: Config loader needs path validation using `safe_join()`
+- **Remaining XSS**: One instance in `base_milvus.py` needs sanitization
+
+### Recent Updates (v1.1.0)
+
+#### ✅ **Schema Generation Improvements**
+- **Custom Schema Generation**: New `/generate_schema` endpoint for creating collections with specific parameters
+- **Flexible Vector Dimensions**: Support for custom vector dimensions per model/tenant
+- **Index Optimization**: Removed model field indexing for better performance and compatibility
+- **Permission Management**: Enhanced tenant role privileges including Upsert permissions
+
+#### ✅ **API Simplification**
+- **Streamlined Vector Store Setup**: Removed unused `vector_dimension` parameter from `set_vector_store`
+- **Model-Agnostic Operations**: Insert and search operations no longer depend on model field filtering
+- **Improved Error Handling**: Better error messages for schema generation and permission issues
+
+#### ✅ **Code Quality & Testing**
+- **Python 3.9 Compatibility**: Fixed syntax issues for better compatibility
+- **Enhanced Test Coverage**: All 48 tests passing with improved fixtures
+- **Dependency Management**: Added missing dependencies (werkzeug, psutil)
+- **Code Cleanup**: Removed unused methods and parameters
+
 ### Key Notes
 - **Super user required** for tenant and vector store creation
-- **Consistent vector dimensions** required for similarity search
+- **Custom schema generation** allows per-tenant/model configuration
+- **Hybrid search** combines semantic (dense) and keyword (sparse) matching
+- **BM25 sparse vectors** automatically generated during data insertion
+- **RRF scoring** intelligently combines dense and sparse search results
+- **Collection-specific permissions** automatically granted to tenant users
 - **Environment variables** override JSON configuration
 - **Uvicorn ASGI server** for high performance
 

@@ -4,7 +4,9 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.utils.input_validator import validate_tenant_code
 
 
 class BaseRequest(BaseModel):
@@ -19,3 +21,8 @@ class BaseRequest(BaseModel):
     )
 
     model_config = ConfigDict(extra="allow")
+
+    @field_validator("tenant_code")
+    @classmethod
+    def validate_tenant_code_field(cls, v):
+        return validate_tenant_code(v)

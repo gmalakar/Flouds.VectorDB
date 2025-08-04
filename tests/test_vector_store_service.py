@@ -25,15 +25,15 @@ def base_request():
 
 @pytest.fixture
 def set_vector_store_request():
-    return SetVectorStoreRequest(
-        tenant_code="tenant1", token="user:pass", vector_dimension=256
-    )
+    return SetVectorStoreRequest(tenant_code="tenant1", token="user:pass")
 
 
 @pytest.fixture
 def insert_embedded_request():
     vec = EmbeddedVector(key="vec-1", chunk="abc", model="test", vector=[0.1, 0.2, 0.3])
-    return InsertEmbeddedRequest(tenant_code="tenant1", token="user:pass", data=[vec])
+    return InsertEmbeddedRequest(
+        tenant_code="tenant1", token="user:pass", model_name="test", data=[vec]
+    )
 
 
 @pytest.fixture
@@ -46,8 +46,16 @@ def search_request():
         offset=0,
         nprobe=10,
         round_decimal=2,
+        consistency_level="Bounded",
+        output_fields=["chunk", "meta"],
         score_threshold=0.8,
+        meta_required=False,
         metric_type="COSINE",
+        text_filter="test filter",
+        minimum_words_match=2,
+        include_stop_words=False,
+        increase_limit_for_text_search=10,
+        hybrid_search=False,
         vector=[0.1, 0.2, 0.3],
     )
 
@@ -191,6 +199,20 @@ def test_search_in_vector_store_success(search_request):
         assert resp.data == fake_results
         assert resp.message == "Vector store search completed successfully."
         assert resp.tenant_code == "tenant1"
+        assert resp.model == "test-model"
+        assert resp.limit == 10
+        assert resp.offset == 0
+        assert resp.nprobe == 10
+        assert resp.round_decimal == 2
+        assert resp.consistency_level == "Bounded"
+        assert resp.output_fields == ["chunk", "meta"]
+        assert resp.score_threshold == 0.8
+        assert resp.meta_required is False
+        assert resp.metric_type == "COSINE"
+        assert resp.text_filter == "test filter"
+        assert resp.minimum_words_match == 2
+        assert resp.include_stop_words is False
+        assert resp.increase_limit_for_text_search == 10
 
 
 def test_search_in_vector_store_no_results(search_request):
@@ -205,6 +227,10 @@ def test_search_in_vector_store_no_results(search_request):
         assert resp.data == []
         assert resp.message == "No vectors found in the vector store."
         assert resp.tenant_code == "tenant1"
+        assert resp.model == "test-model"
+        assert resp.limit == 10
+        assert resp.text_filter == "test filter"
+        assert resp.minimum_words_match == 2
 
 
 def test_search_in_vector_store_failure(search_request):
@@ -219,3 +245,7 @@ def test_search_in_vector_store_failure(search_request):
         assert "fail" in resp.message
         assert resp.data == []
         assert resp.tenant_code == "tenant1"
+        assert resp.model == "test-model"
+        assert resp.limit == 10
+        assert resp.text_filter == "test filter"
+        assert resp.minimum_words_match == 2

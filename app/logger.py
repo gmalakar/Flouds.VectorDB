@@ -1,6 +1,9 @@
 # =============================================================================
 # File: logger.py
-# Date: 2025-06-10
+# Description: Centralized logging configuration with file and console handlers
+# Author: Goutam Malakar
+# Date: 2025-01-15
+# Version: 1.0.0
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 
@@ -8,68 +11,91 @@ import logging
 import os
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
-from typing import Optional
 
 
-def get_logger(name: str = "flouds", log_path: Optional[str] = None) -> logging.Logger:
+def get_logger(name: str) -> logging.Logger:
     """
-    Returns a configured logger instance.
-    - Uses rotating file handler and console handler.
-    - Log file location and level are environment-aware.
-    - Avoids duplicate handlers for the same logger.
+    Get logger with explicit name. Auto-detection removed for performance.
+
+    Args:
+        name (str): Logger name identifier (will be prefixed with 'flouds.')
+
+    Returns:
+        logging.Logger: Configured logger instance with file and console handlers
     """
+    return _get_or_create_logger(f"flouds.{name}")
+
+
+# Track configured loggers
+_configured_loggers = set()
+
+
+def _get_or_create_logger(logger_name: str) -> logging.Logger:
+    """
+    Get or create logger with specific name and configuration.
+
+    Args:
+        logger_name (str): Full logger name
+
+    Returns:
+        logging.Logger: Configured logger with appropriate handlers and formatters
+    """
+    logger = logging.getLogger(logger_name)
+
+    # Only configure if not already configured
+    if logger_name in _configured_loggers:
+        return logger
+
+    _configured_loggers.add(logger_name)
     is_production = os.getenv("FLOUDS_API_ENV", "Production").lower() == "production"
-
-    if log_path is None:
-        if is_production:
-            log_dir = os.getenv("FLOUDS_LOG_PATH", "/flouds-vector/logs")
-        else:
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            parent_dir = os.path.dirname(current_dir)
-            log_dir = os.path.join(parent_dir, "logs")
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        log_file = f"flouds-ai-{date_str}.log"
-        log_path = os.path.join(log_dir, log_file)
+    level = logging.INFO  # Default log level
+    if is_production:
+        log_dir = os.getenv("FLOUDS_LOG_PATH", "/flouds-vectordb/logs")
+        level = (
+            logging.DEBUG if os.getenv("APP_DEBUG_MODE", "0") == "1" else logging.INFO
+        )
     else:
-        log_dir = os.path.dirname(log_path)
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
+        # Get parent directory of app folder and create logs folder there
+        current_dir = os.path.dirname(os.path.abspath(__file__))  # app folder
+        parent_dir = os.path.dirname(current_dir)  # parent of app
+        log_dir = os.path.join(parent_dir, "logs")
+        level = logging.DEBUG  # Override for development
 
-    max_bytes = 10 * 1024 * 1024  # 10 MB
-    backup_count = 5
+    # Add date to log file name
 
-    logger = logging.getLogger(name)
-    level = logging.DEBUG if os.getenv("APP_DEBUG_MODE", "0") == "1" else logging.INFO
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    log_file = f"flouds-vectordb-{date_str}.log"
+    max_bytes = int(os.getenv("FLOUDS_LOG_MAX_FILE_SIZE", "10485760"))
+    backup_count = int(os.getenv("FLOUDS_LOG_BACKUP_COUNT", "5"))
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    log_path = os.path.join(log_dir, log_file)
+
     logger.setLevel(level)
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"
-    )
 
-    # Prevent duplicate handlers
-    handler_paths = [
-        h.baseFilename for h in logger.handlers if hasattr(h, "baseFilename")
-    ]
-    stream_handlers = [
-        h for h in logger.handlers if isinstance(h, logging.StreamHandler)
-    ]
+    log_format = os.getenv(
+        "FLOUDS_LOG_FORMAT", "%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
+    formatter = logging.Formatter(log_format)
 
     # Console handler
-    if not stream_handlers:
-        ch = logging.StreamHandler()
-        ch.setFormatter(formatter)
-        logger.addHandler(ch)
+    ch = logging.StreamHandler()
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
 
     # Rotating file handler
-    if log_path not in handler_paths:
+    try:
         fh = RotatingFileHandler(
             log_path, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
         )
         fh.setFormatter(formatter)
         logger.addHandler(fh)
-
-    # Avoid log message duplication in child loggers
-    logger.propagate = False
+    except (OSError, PermissionError, FileNotFoundError) as e:
+        print(f"Warning: Failed to create log file handler: {e}")
+    except (ValueError, TypeError, AttributeError) as e:
+        print(f"Warning: Configuration error creating log file handler: {e}")
+    except Exception as e:
+        print(f"Warning: Unexpected error creating log file handler: {e}")
 
     return logger

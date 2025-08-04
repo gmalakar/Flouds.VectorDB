@@ -1,0 +1,289 @@
+{
+  "info": {
+    "name": "Flouds Vector API",
+    "description": "Multi-tenant vector database API with Milvus backend",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{auth_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:19680",
+      "type": "string"
+    },
+    {
+      "key": "auth_token",
+      "value": "admin:admin_password",
+      "type": "string"
+    },
+    {
+      "key": "tenant_code",
+      "value": "demo_tenant",
+      "type": "string"
+    },
+    {
+      "key": "model_name",
+      "value": "sentence-transformers",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Monitoring",
+      "item": [
+        {
+          "name": "Root Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": ["{{base_url}}"],
+              "path": [""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Comprehensive Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Readiness Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health/ready",
+              "host": ["{{base_url}}"],
+              "path": ["health", "ready"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Liveness Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health/live",
+              "host": ["{{base_url}}"],
+              "path": ["health", "live"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Connection Pool Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health/connections",
+              "host": ["{{base_url}}"],
+              "path": ["health", "connections"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "System Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/metrics",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "metrics"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Vector Store Management",
+      "item": [
+        {
+          "name": "Set Vector Store",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_code\": \"{{tenant_code}}\",\n  \"vector_dimension\": 384\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/vector_store/set_vector_store",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vector_store", "set_vector_store"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Schema",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_code\": \"{{tenant_code}}\",\n  \"model_name\": \"{{model_name}}\",\n  \"dimension\": 384,\n  \"nlist\": 1024,\n  \"metric_type\": \"COSINE\",\n  \"index_type\": \"IVF_FLAT\",\n  \"metadata_length\": 4096\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/vector_store/generate_schema",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vector_store", "generate_schema"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Insert Vectors",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_code\": \"{{tenant_code}}\",\n  \"model_name\": \"{{model_name}}\",\n  \"data\": [\n    {\n      \"key\": \"doc_001\",\n      \"chunk\": \"This is a sample document about machine learning and artificial intelligence.\",\n      \"model\": \"{{model_name}}\",\n      \"metadata\": {\n        \"source\": \"research_paper\",\n        \"category\": \"AI\",\n        \"author\": \"John Doe\",\n        \"date\": \"2024-01-01\"\n      },\n      \"vector\": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]\n    },\n    {\n      \"key\": \"doc_002\",\n      \"chunk\": \"Vector databases are essential for similarity search in modern applications.\",\n      \"model\": \"{{model_name}}\",\n      \"metadata\": {\n        \"source\": \"blog_post\",\n        \"category\": \"Database\",\n        \"author\": \"Jane Smith\",\n        \"date\": \"2024-01-02\"\n      },\n      \"vector\": [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/vector_store/insert",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vector_store", "insert"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Dense Vector Search",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_code\": \"{{tenant_code}}\",\n  \"model\": \"{{model_name}}\",\n  \"limit\": 10,\n  \"score_threshold\": 0.7,\n  \"metric_type\": \"COSINE\",\n  \"hybrid_search\": false,\n  \"vector\": [0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/vector_store/search",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vector_store", "search"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Hybrid Search",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_code\": \"{{tenant_code}}\",\n  \"model\": \"{{model_name}}\",\n  \"limit\": 10,\n  \"score_threshold\": 0.5,\n  \"metric_type\": \"COSINE\",\n  \"hybrid_search\": true,\n  \"text_filter\": \"machine learning artificial intelligence\",\n  \"minimum_words_match\": 2,\n  \"include_stop_words\": false,\n  \"vector\": [0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/vector_store/search",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vector_store", "search"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User Management",
+      "item": [
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_code\": \"{{tenant_code}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/vector_store_users/set_user",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vector_store_users", "set_user"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_code\": \"{{tenant_code}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/vector_store_users/reset_password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "vector_store_users", "reset_password"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
