@@ -151,9 +151,9 @@ class MilvusHelper(BaseMilvus):
         )
 
         if getattr(request, "hybrid_search", False):
-            return tenant_store.hybrid_search_store(request=request, **kwargs)
+            return tenant_store.hybrid_search_store(search_request=request, **kwargs)
         else:
-            return tenant_store.search_store(request=request, **kwargs)
+            return tenant_store.search_store(search_request=request, **kwargs)
 
     @staticmethod
     def set_user(request: SetUserRequest, token: str, **kwargs: Any) -> dict:

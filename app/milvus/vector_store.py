@@ -305,13 +305,15 @@ class VectorStore(BaseMilvus):
         )
 
         # Increase limit if text filtering is needed
-        search_limit = request.limit or 5
+        search_limit = search_request.limit or 5
         if (
-            hasattr(request, "text_filter")
-            and request.text_filter
-            and request.text_filter.strip()
+            hasattr(search_request, "text_filter")
+            and search_request.text_filter
+            and search_request.text_filter.strip()
         ):
-            search_limit += getattr(request, "increase_limit_for_text_search", 10)
+            search_limit += getattr(
+                search_request, "increase_limit_for_text_search", 10
+            )
 
         search_params = self._build_base_search_params(search_request, search_limit)
         search_params["search_params"] = {
