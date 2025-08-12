@@ -86,3 +86,7 @@ desktop.ini
 *.tmp
 *.bak
 *.old
+
+# Additional exclusions
+secrets/
+installed_packages.txt
