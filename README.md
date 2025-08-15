@@ -223,7 +223,8 @@ curl -X POST http://localhost:19680/api/v1/vector_store/generate_schema \
     "metric_type": "COSINE",
     "index_type": "IVF_FLAT",
     "nlist": 1024,
-    "metadata_length": 4096
+    "metadata_length": 4096,
+    "drop_ratio_build": 0.1
   }'
 ```
 
