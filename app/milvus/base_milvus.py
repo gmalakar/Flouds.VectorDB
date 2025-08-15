@@ -200,13 +200,6 @@ class BaseMilvus:
         """Configure Milvus endpoint from environment or settings."""
         endpoint = getenv("VECTORDB_ENDPOINT") or APP_SETTINGS.vectordb.endpoint
 
-        # Fix Docker hostname issues when running locally
-        if endpoint == "milvus-standalone" and not getenv("VECTORDB_ENDPOINT"):
-            endpoint = "localhost"
-            logger.info(
-                "Running locally: switched endpoint from 'milvus-standalone' to 'localhost'"
-            )
-
         # Add protocol if missing
         if not re.match(r"^https?://", endpoint):
             endpoint = f"http://{endpoint}"

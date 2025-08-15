@@ -32,41 +32,43 @@ PULL_ALWAYS=""
 FORCE=false
 BUILD_IMAGE=false
 
+# Valid parameter list
+VALID_PARAMS=("--force" "--env-file" "--instance-name" "--image-name" "--port" "--build-image" "--pull-always")
+SWITCH_PARAMS=("--force" "--build-image" "--pull-always")
+
 while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --env-file)
-            ENV_FILE="$2"
-            shift 2
-            ;;
-        --instance)
-            INSTANCE_NAME="$2"
-            shift 2
-            ;;
-        --image)
-            IMAGE_NAME="$2"
-            shift 2
-            ;;
-        --port)
-            PORT="$2"
-            shift 2
-            ;;
-        --pull-always)
-            PULL_ALWAYS="--pull always"
-            shift
-            ;;
-        --force)
-            FORCE=true
-            shift
-            ;;
-        --build-image)
-            BUILD_IMAGE=true
-            shift
-            ;;
-        *)
-            echo "❌ Unknown option: $1"
+    param="$1"
+    
+    # Check if parameter is valid
+    if [[ ! " ${VALID_PARAMS[@]} " =~ " ${param} " ]]; then
+        echo "❌ Error: Invalid parameter '$param'"
+        echo "Valid parameters: ${VALID_PARAMS[*]}"
+        exit 1
+    fi
+    
+    # Handle parameter based on type
+    if [[ " ${SWITCH_PARAMS[@]} " =~ " ${param} " ]]; then
+        # Switch parameters
+        case "$param" in
+            --force) FORCE=true ;;
+            --build-image) BUILD_IMAGE=true ;;
+            --pull-always) PULL_ALWAYS="--pull always" ;;
+        esac
+        shift
+    else
+        # Parameters with values
+        if [[ $# -lt 2 ]]; then
+            echo "❌ Error: Parameter '$param' requires a value"
             exit 1
-            ;;
-    esac
+        fi
+        case "$param" in
+            --env-file) ENV_FILE="$2" ;;
+            --instance-name) INSTANCE_NAME="$2" ;;
+            --image-name) IMAGE_NAME="$2" ;;
+            --port) PORT="$2" ;;
+        esac
+        shift 2
+    fi
 done
 
 # Default configuration

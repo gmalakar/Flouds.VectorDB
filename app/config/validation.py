@@ -36,6 +36,20 @@ def validate_config() -> None:
         logger.error(error_message)
         raise ValueError(error_message)
 
+    # Print configuration values (excluding password)
+    host = os.getenv("SERVER_HOST") or APP_SETTINGS.server.host
+    port = int(os.getenv("SERVER_PORT", APP_SETTINGS.server.port))
+    endpoint = os.getenv("VECTORDB_ENDPOINT") or APP_SETTINGS.vectordb.endpoint
+    db_port = int(os.getenv("VECTORDB_PORT", APP_SETTINGS.vectordb.port))
+    username = os.getenv("VECTORDB_USERNAME") or APP_SETTINGS.vectordb.username
+    password_file = (
+        os.getenv("VECTORDB_PASSWORD_FILE") or APP_SETTINGS.vectordb.password_file
+    )
+
+    logger.info(f"Server config: host={host}, port={port}")
+    logger.info(
+        f"VectorDB config: endpoint={endpoint}, port={db_port}, username={username}, password_file={password_file}"
+    )
     logger.info("Configuration validation passed")
 
 
@@ -43,14 +57,18 @@ def _validate_server_config() -> List[str]:
     """Validate server configuration."""
     errors = []
 
-    if not APP_SETTINGS.server.host:
+    # Get values from environment or config
+    host = os.getenv("SERVER_HOST") or APP_SETTINGS.server.host
+    port = int(os.getenv("SERVER_PORT", APP_SETTINGS.server.port))
+
+    if not host:
         errors.append("Server host is required")
-    elif APP_SETTINGS.server.host == "0.0.0.0" and APP_SETTINGS.app.is_production:
+    elif host == "0.0.0.0" and APP_SETTINGS.app.is_production:
         logger.warning("Server bound to 0.0.0.0 in production")
 
-    if not isinstance(APP_SETTINGS.server.port, int) or APP_SETTINGS.server.port <= 0:
+    if not isinstance(port, int) or port <= 0:
         errors.append("Server port must be a positive integer")
-    elif APP_SETTINGS.server.port < 1024 or APP_SETTINGS.server.port > 65535:
+    elif port < 1024 or port > 65535:
         errors.append("Server port must be between 1024 and 65535")
 
     return errors
@@ -64,27 +82,30 @@ def _validate_vectordb_config() -> List[str]:
         errors.append("Vector database configuration is required")
         return errors
 
+    # Get values from environment or config
+    endpoint = os.getenv("VECTORDB_ENDPOINT") or APP_SETTINGS.vectordb.endpoint
+    port = int(os.getenv("VECTORDB_PORT", APP_SETTINGS.vectordb.port))
+    username = os.getenv("VECTORDB_USERNAME") or APP_SETTINGS.vectordb.username
+
     # Validate endpoint
-    if not APP_SETTINGS.vectordb.endpoint:
+    if not endpoint:
         errors.append("Vector database endpoint is required")
-    elif not re.match(r"^(https?://)?[\w\.-]+(:\d+)?$", APP_SETTINGS.vectordb.endpoint):
+    elif not re.match(r"^(https?://)?[\w\.-]+(:\d+)?$", endpoint):
         errors.append("Vector database endpoint format is invalid")
 
     # Validate port
-    if (
-        not isinstance(APP_SETTINGS.vectordb.port, int)
-        or APP_SETTINGS.vectordb.port <= 0
-    ):
+    if not isinstance(port, int) or port <= 0:
         errors.append("Vector database port must be a positive integer")
-    elif APP_SETTINGS.vectordb.port < 1 or APP_SETTINGS.vectordb.port > 65535:
+    elif port < 1 or port > 65535:
         errors.append("Vector database port must be between 1 and 65535")
 
     # Validate credentials
-    if not APP_SETTINGS.vectordb.username:
+    if not username:
         errors.append("Vector database username is required")
 
     # Check password or password file
     password = os.getenv("VECTORDB_PASSWORD") or APP_SETTINGS.vectordb.password
+
     password_file = (
         os.getenv("VECTORDB_PASSWORD_FILE") or APP_SETTINGS.vectordb.password_file
     )
@@ -92,8 +113,16 @@ def _validate_vectordb_config() -> List[str]:
     if not password and not password_file:
         errors.append("Vector database password or password file is required")
 
-    if password_file and not os.path.exists(password_file):
-        errors.append(f"Vector database password file does not exist: {password_file}")
+    # Validate password file if VECTORDB_PASSWORD_FILE is set
+    env_password_file = os.getenv("VECTORDB_PASSWORD_FILE")
+    if env_password_file:
+        # Skip container paths (start with /), only validate host paths
+        if not env_password_file.startswith("/") and not os.path.exists(
+            env_password_file
+        ):
+            errors.append(
+                f"Vector database password file does not exist: {env_password_file}"
+            )
 
     # Validate dimensions
     if not isinstance(APP_SETTINGS.vectordb.default_dimension, int):

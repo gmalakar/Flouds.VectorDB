@@ -20,15 +20,56 @@
 #   -PullAlways    : Always pull image from registry before running
 # =============================================================================
 
-param (
-    [string]$EnvFile = ".env",
-    [string]$InstanceName = "floudsvector-instance",
-    [string]$ImageName = "gmalakar/flouds-vector:latest",
-    [int]$Port = 19680,
-    [switch]$Force = $false,
-    [switch]$BuildImage = $false,
-    [switch]$PullAlways = $false
-)
+# Custom parameter parsing
+$EnvFile = ".env"
+$InstanceName = "floudsvector-instance"
+$ImageName = "gmalakar/flouds-vector:latest"
+$Port = 19680
+$Force = $false
+$BuildImage = $false
+$PullAlways = $false
+
+# Valid parameter list with exact names
+$validParams = @("-force", "-env-file", "-instance-name", "-image-name", "-port", "-build-image", "-pull-always")
+$switchParams = @("-force", "-build-image", "-pull-always")
+
+
+
+for ($i = 0; $i -lt $args.Count; $i++) {
+    $arg = $args[$i].ToLower()
+    
+    # Check if parameter exists in valid list
+    if ($arg -notin $validParams) {
+        Write-Host "Error: Invalid parameter '$($args[$i])'" -ForegroundColor Red
+        Write-Host "Valid parameters: $($validParams -join ', ')" -ForegroundColor Yellow
+        exit 1
+    }
+    
+    # Handle parameter based on type
+    if ($arg -in $switchParams) {
+        # Switch parameters
+        switch ($arg) {
+            "-force" { $Force = $true }
+            "-build-image" { $BuildImage = $true }
+            "-pull-always" { $PullAlways = $true }
+        }
+    } else {
+        # Parameters with values
+        if ($i + 1 -lt $args.Count) {
+            $paramValue = $args[$i + 1]
+            switch ($arg) {
+                "-env-file" { $EnvFile = $paramValue }
+                "-instance-name" { $InstanceName = $paramValue }
+                "-image-name" { $ImageName = $paramValue }
+                "-port" { $Port = [int]$paramValue }
+            }
+            $i++ # Skip next argument as it's the value
+        } else {
+            Write-Host "Error: Parameter '$($args[$i])' requires a value" -ForegroundColor Red
+            exit 1
+        }
+    }
+}
 
 function Write-StepHeader {
     param ([string]$Message)
@@ -158,6 +199,8 @@ function Set-DirectoryPermissions {
     }
 }
 
+
+
 Write-Host "========================================================="
 Write-Host "                FLOUDS VECTOR STARTER SCRIPT             " -ForegroundColor Cyan
 Write-Host "========================================================="
@@ -245,7 +288,7 @@ if ($envVars.ContainsKey("VECTORDB_PASSWORD_FILE")) {
     # Check if password file directory exists and is writable
     Set-DirectoryPermissions -Path $passwordFileDir -Description "Password file"
     
-    Write-Host "Mounting password file: $passwordFile  $containerPasswordFile"
+    Write-Host "Mounting password file: $passwordFile → $containerPasswordFile"
     $dockerArgs += "-v"
     $dockerArgs += "${passwordFile}:${containerPasswordFile}:rw"
     $dockerArgs += "-e"
