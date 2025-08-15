@@ -420,6 +420,7 @@ class VectorStoreService:
                 metric_type=request.metric_type,
                 index_type=request.index_type,
                 metadata_length=request.metadata_length,
+                drop_ratio_build=request.drop_ratio,
                 token=token,
                 **kwargs,
             )

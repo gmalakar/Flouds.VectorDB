@@ -282,6 +282,7 @@ class MilvusHelper(BaseMilvus):
         metric_type: str,
         index_type: str,
         metadata_length: int,
+        drop_ratio_build: float,
         token: str,
         **kwargs: Any,
     ) -> dict[str, Any]:
@@ -336,6 +337,7 @@ class MilvusHelper(BaseMilvus):
                 metric_type=metric_type,
                 index_type=index_type,
                 metadata_length=metadata_length,
+                drop_ratio_build=drop_ratio_build,
                 **kwargs,
             )
 

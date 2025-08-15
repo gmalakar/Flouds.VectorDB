@@ -47,6 +47,12 @@ class GenerateSchemaRequest(BaseRequest):
         le=65535,
         description="Maximum length for metadata field (256-65535).",
     )
+    drop_ratio_build: float = Field(
+        default=0.1,
+        ge=0.0,
+        le=1.0,
+        description="Drop ratio for sparse index (0.0-1.0).",
+    )
 
     @field_validator("model_name")
     @classmethod

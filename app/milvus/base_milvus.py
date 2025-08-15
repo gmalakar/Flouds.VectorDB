@@ -29,6 +29,7 @@ from pymilvus import (
     utility,
 )
 from pymilvus.milvus_client.index import IndexParams
+from regex import B
 
 from app.app_init import APP_SETTINGS
 from app.exceptions.custom_exceptions import (
@@ -74,6 +75,8 @@ class BaseMilvus:
     __VECTOR_FIELD_NAME: str = "flouds_vector"
     __DB_NAME_SUFFIX: str = "_vectorstore"
     __TENANT_NAME_SUFFIX: str = "_tenant_role"
+    __SPARSE_INDEX_NAME: str = "flouds_sparse_vector_index"
+    __VECTOR_INDEX_NAME: str = "flouds_vector_index"
     __CLIENT_ID_LENGTH: int = 32
     __CLIENT_SECRET_LENGTH: int = 36
     __TENANT_ROLE_PRIVILEGES: List[str] = [
@@ -987,6 +990,7 @@ class BaseMilvus:
         metric_type: str = "COSINE",
         index_type: str = "IVF_FLAT",
         metadata_length: int = 4096,
+        drop_ratio_build: float = 0.1,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Generates a custom schema with specified parameters for a tenant and model."""
@@ -998,6 +1002,7 @@ class BaseMilvus:
             metric_type,
             index_type,
             metadata_length,
+            drop_ratio_build,
         )
 
         try:
@@ -1009,7 +1014,13 @@ class BaseMilvus:
                 tenant_code, collection_name, dimension, metadata_length, summary
             )
             BaseMilvus._create_custom_indexes(
-                tenant_code, collection_name, index_type, metric_type, nlist, summary
+                tenant_code,
+                collection_name,
+                index_type,
+                metric_type,
+                nlist,
+                drop_ratio_build,
+                summary,
             )
             BaseMilvus._grant_collection_permissions(tenant_code, collection_name)
             return summary
@@ -1027,6 +1038,7 @@ class BaseMilvus:
         metric_type: str,
         index_type: str,
         metadata_length: int,
+        drop_ratio_build: float,
     ) -> dict[str, Any]:
         """Initialize schema generation summary."""
         return {
@@ -1035,12 +1047,17 @@ class BaseMilvus:
             "collection_name": None,
             "db_name": None,
             "schema_created": False,
-            "index_created": False,
+            "schema_exists": False,
+            "vector_index": "not created",
+            "index_name": BaseMilvus.__VECTOR_INDEX_NAME,
+            "sparse_index": "not created",
+            "sparse_index_name": BaseMilvus.__SPARSE_INDEX_NAME,
             "dimension": dimension,
             "nlist": nlist,
             "metric_type": metric_type,
             "index_type": index_type,
             "metadata_length": metadata_length,
+            "drop_ratio_build": drop_ratio_build,
             "message": "Custom schema generation completed successfully.",
         }
 
@@ -1091,6 +1108,7 @@ class BaseMilvus:
                 )
                 summary["schema_created"] = True
             else:
+                summary["schema_exists"] = True
                 logger.info(f"Collection '{collection_name}' already exists.")
 
     @staticmethod
@@ -1100,6 +1118,7 @@ class BaseMilvus:
         index_type: str,
         metric_type: str,
         nlist: int,
+        drop_ratio_build: float,
         summary: dict,
     ) -> None:
         """Create custom indexes for the collection."""
@@ -1110,12 +1129,28 @@ class BaseMilvus:
             )
 
             # Create vector index
-            if "flouds_vector_index" not in existing_indexes:
+            if BaseMilvus.__VECTOR_INDEX_NAME not in existing_indexes:
                 BaseMilvus._create_vector_index(
                     db_admin_client, collection_name, index_type, metric_type, nlist
                 )
-                summary["index_created"] = True
+                summary["vector_index"] = "created"
+            else:
+                summary["vector_index"] = "already exists"
+                logger.info(
+                    f"Vector index {BaseMilvus.__VECTOR_INDEX_NAME} already exists on '{collection_name}'."
+                )
 
+            # Create sparse index
+            if BaseMilvus.__SPARSE_INDEX_NAME not in existing_indexes:
+                BaseMilvus._create_sparse_index(
+                    db_admin_client, collection_name, drop_ratio_build
+                )
+                summary["sparse_index"] = "created"
+            else:
+                summary["sparse_index"] = "already exists"
+                logger.info(
+                    f"Sparse index {BaseMilvus.__SPARSE_INDEX_NAME} already exists on '{collection_name}'."
+                )
             # Note: Model index removed as model field is not present in custom schema
 
     @staticmethod
@@ -1145,12 +1180,12 @@ class BaseMilvus:
         ip.add_index(
             field_name=BaseMilvus._get_vector_field_name(),
             index_type=index_type,
-            index_name="flouds_vector_index",
+            index_name=BaseMilvus.__VECTOR_INDEX_NAME,
             metric_type=metric_type,
             params={"nlist": nlist},
         )
         db_admin_client.create_index(collection_name=collection_name, index_params=ip)
-        logger.info(f"Custom index 'flouds_vector_index' created.")
+        logger.info(f"Custom index {BaseMilvus.__VECTOR_INDEX_NAME} created.")
 
     @staticmethod
     def _grant_collection_permissions(tenant_code: str, collection_name: str) -> None:
@@ -1164,91 +1199,12 @@ class BaseMilvus:
         )
 
     @staticmethod
-    def _create_vector_store_index_if_not_exists(
-        collection_name: str, tenant_code: str
-    ) -> bool:
-        """
-        Creates the index for the given collection in the tenant's database if it does not exist.
-        Returns True if created, False if already exists.
-        Raises Exception on error.
-        """
-        vector_index_name = "flouds_vector_index"
-        vector_field_name = BaseMilvus._get_vector_field_name()
-        nlist = APP_SETTINGS.vectordb.index_params.nlist or 256
-        metric_type = APP_SETTINGS.vectordb.index_params.metric_type or "COSINE"
-        index_type = APP_SETTINGS.vectordb.index_params.index_type or "IVF_FLAT"
-        try:
-            with BaseMilvus.__db_switch_lock:
-                db_admin_client = BaseMilvus._get_or_create_tenant_connection(
-                    tenant_code
-                )
-                vector_index_params = {
-                    "field_name": vector_field_name,
-                    "index_type": index_type,
-                    "metric_type": metric_type,
-                    "params": {"nlist": nlist},
-                    "index_name": vector_index_name,
-                }
-                # Check if index exists
-                indexes = db_admin_client.list_indexes(collection_name=collection_name)
-                existing = set()
-                for idx in indexes:
-                    if isinstance(idx, dict) and "index_name" in idx:
-                        existing.add(idx["index_name"])
-                    elif isinstance(idx, str):
-                        existing.add(idx)
-
-                if vector_index_name not in existing:
-                    ip = IndexParams()
-                    ip.add_index(
-                        field_name=vector_index_params["field_name"],
-                        index_type=vector_index_params["index_type"],
-                        index_name=vector_index_params["index_name"],
-                        metric_type=vector_index_params["metric_type"],
-                        params=vector_index_params["params"],
-                    )
-                    db_admin_client.create_index(
-                        collection_name=collection_name, index_params=ip
-                    )
-                    logger.debug(
-                        f"Index '{vector_index_name}' created on 'vector' in '{collection_name}'."
-                    )
-                    created = True
-                else:
-                    logger.debug(
-                        f"Index '{vector_index_name}' already exists on '{collection_name}'."
-                    )
-                    created = False
-                # Note: Model index creation removed as model field usage has been removed
-
-            return created
-
-        except MilvusException as e:
-            logger.error(
-                f"Milvus error creating index '{vector_index_name}' for tenant '{tenant_code}': {e}"
-            )
-            raise FloudsIndexError(
-                f"Failed to create index '{vector_index_name}' for tenant '{tenant_code}': {e}"
-            )
-        except Exception as e:
-            logger.error(
-                f"Unexpected error creating index '{vector_index_name}' for tenant '{tenant_code}': {e}"
-            )
-            raise FloudsIndexError(
-                f"Failed to create index '{vector_index_name}' for tenant '{tenant_code}': {e}"
-            )
-
-    @staticmethod
-    def _create_sparse_vector_index_if_not_exists(
-        collection_name: str, tenant_code: str, drop_ratio_build: float = None
-    ) -> bool:
-        """
-        Creates the sparse vector index for the given collection in the tenant's database if it does not exist.
-        Returns True if created, False if already exists.
-        Raises Exception on error.
-        """
-        sparse_index_name = "flouds_sparse_vector_index"
-
+    def _create_sparse_index(
+        db_admin_client: MilvusClient,
+        collection_name: str,
+        drop_ratio_build: float = 0.1,
+    ) -> None:
+        """Create sparse vector index for collection."""
         # Validate drop_ratio_build parameter
         if (
             drop_ratio_build is None
@@ -1257,64 +1213,27 @@ class BaseMilvus:
         ):
             drop_ratio_build = 0.1
 
-        try:
-            with BaseMilvus.__db_switch_lock:
-                db_admin_client = BaseMilvus._get_or_create_tenant_connection(
-                    tenant_code
-                )
-                sparse_index_params = {
-                    "field_name": "sparse_vector",
-                    "index_type": "SPARSE_INVERTED_INDEX",
-                    "metric_type": "IP",
-                    "params": {"drop_ratio_build": drop_ratio_build},
-                    "index_name": sparse_index_name,
-                }
+        ip = IndexParams()
+        ip.add_index(
+            field_name="sparse_vector",
+            index_type="SPARSE_INVERTED_INDEX",
+            index_name=BaseMilvus.__SPARSE_INDEX_NAME,
+            metric_type="IP",
+            params={"drop_ratio_build": drop_ratio_build},
+        )
+        db_admin_client.create_index(collection_name=collection_name, index_params=ip)
+        logger.info(f"Sparse index {BaseMilvus.__SPARSE_INDEX_NAME} created.")
 
-                # Check if index exists
-                indexes = db_admin_client.list_indexes(collection_name=collection_name)
-                existing = set()
-                for idx in indexes:
-                    if isinstance(idx, dict) and "index_name" in idx:
-                        existing.add(idx["index_name"])
-                    elif isinstance(idx, str):
-                        existing.add(idx)
-
-                if sparse_index_name not in existing:
-                    ip = IndexParams()
-                    ip.add_index(
-                        field_name=sparse_index_params["field_name"],
-                        index_type=sparse_index_params["index_type"],
-                        index_name=sparse_index_params["index_name"],
-                        metric_type=sparse_index_params["metric_type"],
-                        params=sparse_index_params["params"],
-                    )
-                    db_admin_client.create_index(
-                        collection_name=collection_name, index_params=ip
-                    )
-                    logger.debug(
-                        f"Sparse index '{sparse_index_name}' created on 'sparse_vector' in '{collection_name}'."
-                    )
-                    return True
-                else:
-                    logger.debug(
-                        f"Sparse index '{sparse_index_name}' already exists on '{collection_name}'."
-                    )
-                    return False
-
-        except MilvusException as e:
-            logger.error(
-                f"Milvus error creating sparse index '{sparse_index_name}' for tenant '{tenant_code}': {e}"
-            )
-            raise FloudsIndexError(
-                f"Failed to create sparse index '{sparse_index_name}' for tenant '{tenant_code}': {e}"
-            )
-        except Exception as e:
-            logger.error(
-                f"Unexpected error creating sparse index '{sparse_index_name}' for tenant '{tenant_code}': {e}"
-            )
-            raise FloudsIndexError(
-                f"Failed to create sparse index '{sparse_index_name}' for tenant '{tenant_code}': {e}"
-            )
+    @staticmethod
+    def _grant_collection_permissions(tenant_code: str, collection_name: str) -> None:
+        """Grant collection permissions to tenant role."""
+        role_name = BaseMilvus._get_tenant_role_name_by_tenant_code(tenant_code)
+        BaseMilvus._grant_tenant_privileges_to_collection_if_not_exists(
+            tenant_code=tenant_code, object_name=collection_name, role_name=role_name
+        )
+        logger.info(
+            f"Granted permissions on collection '{collection_name}' to role '{role_name}'."
+        )
 
     @staticmethod
     def _grant_tenant_privileges_to_collection_if_not_exists(

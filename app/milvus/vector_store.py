@@ -121,8 +121,6 @@ class VectorStore(BaseMilvus):
             )
         )
         self._tenant_client: Optional[MilvusClient] = None
-        self._has_collection: bool = False
-        self._has_index: bool = False
         self._lock: Lock = Lock()
 
     def _get_tenant_client(self) -> MilvusClient:
@@ -170,13 +168,13 @@ class VectorStore(BaseMilvus):
             return [{}] * len(chunks)
 
     def _ensure_collection_ready(self) -> None:
-        """Ensure collection exists and is ready for operations."""
-        if not self._has_collection:
-            with self._lock:
-                if not self._has_collection and not self.__set_collection():
-                    raise CollectionError(
-                        f"Failed to set collection for {self._store_name}"
-                    )
+        """Check if collection exists and load it, raise error if not found."""
+        client = self._get_tenant_client()
+        if not client.has_collection(self._store_name):
+            raise CollectionError(
+                f"Collection '{self._store_name}' does not exist. Please create it first."
+            )
+        client.load_collection(self._store_name)
 
     @staticmethod
     def __convert_to_field_data(embedded_vectors: List[EmbeddedVector]) -> List[dict]:
@@ -641,67 +639,3 @@ class VectorStore(BaseMilvus):
             except JSONDecodeError:
                 return {}
         return meta if isinstance(meta, dict) else {}
-
-    def __set_collection(self) -> bool:
-        """
-        Ensures the collection for this tenant exists and is loaded.
-        Creates the collection and index if missing.
-        Note: This method should be called within a lock context.
-        """
-        try:
-            client = self._get_tenant_client()
-            if client.has_collection(self._store_name):
-                logger.info(f"Vector store '{self._store_name}' already exists.")
-                if not self._has_index:
-                    BaseMilvus._create_vector_store_index_if_not_exists(
-                        self._store_name, self._tenant_code
-                    )
-                    # Only create sparse index if sparse vectors are supported
-                    if has_sparse_field:
-                        try:
-                            BaseMilvus._create_sparse_vector_index_if_not_exists(
-                                self._store_name,
-                                self._tenant_code,
-                                drop_ratio_build=0.1,
-                            )
-                        except (MilvusException, FloudsIndexError) as e:
-                            logger.warning(f"Failed to create sparse vector index: {e}")
-                        except Exception as e:
-                            logger.warning(
-                                f"Unexpected error creating sparse vector index: {e}"
-                            )
-                    self._has_index = True
-                client.load_collection(self._store_name)
-                logger.info(f"Vector store '{self._store_name}' loaded.")
-                self._has_collection = True
-            else:
-                logger.info(
-                    f"Vector store '{self._store_name}' does not exist. Creating it."
-                )
-                BaseMilvus._setup_tenant_vector_store(
-                    tenant_code=self._tenant_code,
-                    user_id=self._user_id,
-                    vector_dimension=self._vector_dimension,
-                )
-                self._has_collection = True
-                self._has_index = True
-            return True
-        except MilvusException as ex:
-            logger.error(
-                f"Milvus error in _set_collection for '{self._store_name}': {ex}"
-            )
-            raise CollectionError(
-                f"Milvus error setting up collection '{self._store_name}': {ex}"
-            )
-        except (CollectionError, VectorStoreError) as ex:
-            logger.error(
-                f"Collection error in _set_collection for '{self._store_name}': {ex}"
-            )
-            raise
-        except Exception as ex:
-            logger.error(
-                f"Unexpected error in _set_collection for '{self._store_name}': {ex}"
-            )
-            raise CollectionError(
-                f"Failed to set up collection '{self._store_name}': {ex}"
-            )
