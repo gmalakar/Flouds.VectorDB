@@ -8,17 +8,11 @@ from json import JSONDecodeError, dumps, loads
 from threading import Lock
 from typing import Any, List, Optional
 
-from pymilvus import Collection, MilvusClient, MilvusException
+from pymilvus import MilvusClient, MilvusException
 
 from app.app_init import APP_SETTINGS
 from app.exceptions.custom_exceptions import (
-    BM25Error,
     CollectionError,
-)
-from app.exceptions.custom_exceptions import IndexError as FloudsIndexError
-from app.exceptions.custom_exceptions import (
-    MilvusOperationError,
-    SearchError,
     VectorStoreError,
 )
 from app.logger import get_logger

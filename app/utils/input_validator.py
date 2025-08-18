@@ -6,7 +6,6 @@
 
 import os
 import re
-from pathlib import Path
 from typing import Optional
 
 from werkzeug.utils import secure_filename

@@ -38,9 +38,11 @@ def validate_config() -> None:
 
     # Print configuration values (excluding password)
     host = os.getenv("SERVER_HOST") or APP_SETTINGS.server.host
-    port = int(os.getenv("SERVER_PORT", APP_SETTINGS.server.port))
+    port_value = os.getenv("SERVER_PORT") or APP_SETTINGS.server.port
+    port = int(port_value) if port_value is not None else None
     endpoint = os.getenv("VECTORDB_ENDPOINT") or APP_SETTINGS.vectordb.endpoint
-    db_port = int(os.getenv("VECTORDB_PORT", APP_SETTINGS.vectordb.port))
+    db_port_value = os.getenv("VECTORDB_PORT") or APP_SETTINGS.vectordb.port
+    db_port = int(db_port_value) if db_port_value is not None else None
     username = os.getenv("VECTORDB_USERNAME") or APP_SETTINGS.vectordb.username
     password_file = (
         os.getenv("VECTORDB_PASSWORD_FILE") or APP_SETTINGS.vectordb.password_file
@@ -59,14 +61,17 @@ def _validate_server_config() -> List[str]:
 
     # Get values from environment or config
     host = os.getenv("SERVER_HOST") or APP_SETTINGS.server.host
-    port = int(os.getenv("SERVER_PORT", APP_SETTINGS.server.port))
+    port_value = os.getenv("SERVER_PORT") or APP_SETTINGS.server.port
+    port = int(port_value) if port_value is not None else None
 
     if not host:
         errors.append("Server host is required")
     elif host == "0.0.0.0" and APP_SETTINGS.app.is_production:
         logger.warning("Server bound to 0.0.0.0 in production")
 
-    if not isinstance(port, int) or port <= 0:
+    if port is None:
+        errors.append("Server port is required")
+    elif not isinstance(port, int) or port <= 0:
         errors.append("Server port must be a positive integer")
     elif port < 1024 or port > 65535:
         errors.append("Server port must be between 1024 and 65535")
@@ -84,7 +89,8 @@ def _validate_vectordb_config() -> List[str]:
 
     # Get values from environment or config
     endpoint = os.getenv("VECTORDB_ENDPOINT") or APP_SETTINGS.vectordb.endpoint
-    port = int(os.getenv("VECTORDB_PORT", APP_SETTINGS.vectordb.port))
+    port_value = os.getenv("VECTORDB_PORT") or APP_SETTINGS.vectordb.port
+    port = int(port_value) if port_value is not None else None
     username = os.getenv("VECTORDB_USERNAME") or APP_SETTINGS.vectordb.username
 
     # Validate endpoint
@@ -94,7 +100,9 @@ def _validate_vectordb_config() -> List[str]:
         errors.append("Vector database endpoint format is invalid")
 
     # Validate port
-    if not isinstance(port, int) or port <= 0:
+    if port is None:
+        errors.append("Vector database port is required")
+    elif not isinstance(port, int) or port <= 0:
         errors.append("Vector database port must be a positive integer")
     elif port < 1 or port > 65535:
         errors.append("Vector database port must be between 1 and 65535")

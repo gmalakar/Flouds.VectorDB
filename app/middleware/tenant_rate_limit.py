@@ -8,12 +8,11 @@ import time
 from collections import defaultdict
 from typing import Dict
 
-from fastapi import Depends, HTTPException
+from fastapi import HTTPException
 
-from app.dependencies.auth import get_token
 from app.logger import get_logger
 from app.utils.error_formatter import format_rate_limit_response
-from app.utils.input_validator import sanitize_for_log
+from app.utils.log_sanitizer import sanitize_for_log
 
 logger = get_logger("tenant_rate_limit")
 

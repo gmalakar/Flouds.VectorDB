@@ -13,10 +13,7 @@ from app.models.base_request import BaseRequest
 from app.models.search_base import SearchEmbeddedBase
 from app.utils.input_validator import (
     sanitize_text_input,
-    validate_limit,
     validate_model_name,
-    validate_offset,
-    validate_score_threshold,
     validate_vector,
 )
 

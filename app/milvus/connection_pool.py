@@ -6,7 +6,7 @@
 
 import time
 from threading import Lock
-from typing import Dict, Optional
+from typing import Dict
 
 from pymilvus import MilvusClient
 

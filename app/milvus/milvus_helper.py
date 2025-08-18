@@ -5,9 +5,8 @@
 # =============================================================================
 
 from threading import Lock
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Tuple
 
-from app.app_init import APP_SETTINGS
 from app.exceptions.custom_exceptions import (
     AuthenticationError,
     MilvusConnectionError,

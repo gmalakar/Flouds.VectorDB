@@ -12,8 +12,6 @@ import random
 import re
 import string
 from base64 import urlsafe_b64encode
-from functools import lru_cache
-from json import dumps, loads
 from os import environ, getenv, urandom
 from threading import Lock
 from typing import Any, List, Optional
@@ -26,21 +24,15 @@ from pymilvus import (
     MilvusClient,
     MilvusException,
     connections,
-    utility,
 )
 from pymilvus.milvus_client.index import IndexParams
-from regex import B
 
 from app.app_init import APP_SETTINGS
 from app.exceptions.custom_exceptions import (
     CollectionError,
     ConfigurationError,
-)
-from app.exceptions.custom_exceptions import IndexError as FloudsIndexError
-from app.exceptions.custom_exceptions import (
     MilvusConnectionError,
     MilvusOperationError,
-    PasswordPolicyError,
     TenantError,
     UserManagementError,
     VectorStoreError,
@@ -54,7 +46,6 @@ from app.utils.input_validator import (
     sanitize_for_log,
     validate_file_path,
     validate_tenant_code,
-    validate_user_id,
 )
 
 logger = get_logger("BaseMilvus")

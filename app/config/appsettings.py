@@ -4,7 +4,6 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 import os
-from typing import Optional
 
 from pydantic import BaseModel, Field
 

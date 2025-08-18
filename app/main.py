@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.app_init import APP_SETTINGS
 from app.config.startup_validator import validate_startup_config
-from app.exceptions.custom_exceptions import ConfigurationError, MilvusConnectionError
+from app.exceptions.custom_exceptions import MilvusConnectionError
 from app.logger import get_logger
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.middleware.metrics import MetricsMiddleware

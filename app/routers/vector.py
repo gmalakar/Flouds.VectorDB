@@ -7,7 +7,6 @@
 import asyncio
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
 
 from app.dependencies.auth import get_token
 from app.logger import get_logger
@@ -55,9 +54,6 @@ def log_response(response, operation: str):
 async def set_vector_store(
     request: SetVectorStoreRequest,
     token: str = Depends(get_token),
-    _: None = Depends(
-        lambda r=None: check_tenant_rate_limit(r.tenant_code if r else "")
-    ),
 ) -> ListResponse:
     """
     Sets up database, user, and permissions for the given tenant.
@@ -72,6 +68,7 @@ async def set_vector_store(
     logger.debug(
         f"set_vector_store request for tenant: {sanitize_for_log(request.tenant_code)}"
     )
+    check_tenant_rate_limit(request.tenant_code)
     extra_fields = CommonUtils.parse_extra_fields(request, SetVectorStoreRequest)
     response: ListResponse = await asyncio.to_thread(
         VectorStoreService.set_vector_store, request, token=token, **extra_fields
@@ -84,9 +81,6 @@ async def set_vector_store(
 async def insert(
     request: InsertEmbeddedRequest,
     token: str = Depends(get_token),
-    _: None = Depends(
-        lambda r=None: check_tenant_rate_limit(r.tenant_code if r else "")
-    ),
 ) -> BaseResponse:
     """
     Inserts embedded vectors into the model-specific collection for the given tenant.
@@ -101,6 +95,7 @@ async def insert(
     logger.debug(
         f"insert request for tenant: {sanitize_for_log(request.tenant_code)}, vectors: {len(request.data)}"
     )
+    check_tenant_rate_limit(request.tenant_code)
     extra_fields = CommonUtils.parse_extra_fields(request, InsertEmbeddedRequest)
     response: BaseResponse = await asyncio.to_thread(
         VectorStoreService.insert_into_vector_store,
@@ -116,9 +111,6 @@ async def insert(
 async def search(
     request: SearchEmbeddedRequest,
     token: str = Depends(get_token),
-    _: None = Depends(
-        lambda r=None: check_tenant_rate_limit(r.tenant_code if r else "")
-    ),
 ) -> SearchEmbeddedResponse:
     """
     Searches for embedded vectors in the model-specific collection for the given tenant.
@@ -133,6 +125,7 @@ async def search(
     logger.debug(
         f"search request for tenant: {sanitize_for_log(request.tenant_code)}, limit: {request.limit}"
     )
+    check_tenant_rate_limit(request.tenant_code)
     extra_fields = CommonUtils.parse_extra_fields(request, SearchEmbeddedRequest)
     response: SearchEmbeddedResponse = await asyncio.to_thread(
         VectorStoreService.search_in_vector_store,
@@ -148,9 +141,6 @@ async def search(
 async def generate_schema(
     request: GenerateSchemaRequest,
     token: str = Depends(get_token),
-    _: None = Depends(
-        lambda r=None: check_tenant_rate_limit(r.tenant_code if r else "")
-    ),
 ) -> ListResponse:
     """
     Generates a custom schema for the given tenant with specified parameters.
@@ -164,6 +154,7 @@ async def generate_schema(
     logger.debug(
         f"generate_schema request for tenant: {sanitize_for_log(request.tenant_code)}, model: {sanitize_for_log(request.model_name)}, dimension: {request.dimension}"
     )
+    check_tenant_rate_limit(request.tenant_code)
     extra_fields = CommonUtils.parse_extra_fields(request, GenerateSchemaRequest)
     response: ListResponse = await asyncio.to_thread(
         VectorStoreService.generate_schema, request, token=token, **extra_fields
@@ -177,7 +168,6 @@ async def flush_collection(
     tenant_code: str,
     model_name: str,
     token: str = Depends(get_token),
-    _: None = Depends(lambda: check_tenant_rate_limit(tenant_code)),
 ) -> BaseResponse:
     """
     Manually flush a tenant's collection for immediate data persistence.
@@ -186,6 +176,7 @@ async def flush_collection(
     logger.debug(
         f"flush request for tenant: {sanitize_for_log(tenant_code)}, model: {sanitize_for_log(model_name)}"
     )
+    check_tenant_rate_limit(tenant_code)
     response: BaseResponse = await asyncio.to_thread(
         VectorStoreService.flush_vector_store,
         tenant_code=tenant_code,
