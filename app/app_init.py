@@ -3,10 +3,22 @@
 # Date: 2025-06-14
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
+import os
+import warnings
+
 import nltk
 
 from app.config.config_loader import ConfigLoader
 from app.logger import get_logger
+
+# Suppress transformers warning about missing ML frameworks when only using tokenizers
+os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
+warnings.filterwarnings(
+    "ignore",
+    message=".*PyTorch.*TensorFlow.*Flax.*",
+    category=UserWarning,
+    module="transformers",
+)
 
 logger = get_logger("app_init")
 APP_SETTINGS = ConfigLoader.get_app_settings()

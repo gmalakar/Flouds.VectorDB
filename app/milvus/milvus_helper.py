@@ -79,7 +79,7 @@ class MilvusHelper(BaseMilvus):
         """
         client_id, secret_key = MilvusHelper._split_token(token)
         if not BaseMilvus._validate_token(token=token):
-            logger.error(f"Invalid token: {token}")
+            logger.error("Invalid token provided")
             raise AuthenticationError("Invalid token.")
 
         # Check if database exists
@@ -127,7 +127,7 @@ class MilvusHelper(BaseMilvus):
         """
         client_id, secret_key = MilvusHelper._split_token(token)
         if not BaseMilvus._validate_token(token=token):
-            logger.error(f"Invalid token: {token}")
+            logger.error("Invalid token provided")
             raise AuthenticationError("Invalid token.")
 
         # Check if database exists
@@ -170,7 +170,7 @@ class MilvusHelper(BaseMilvus):
             f"Setting up user for tenant '{sanitize_for_log(request.tenant_code)}'"
         )
         if not BaseMilvus._validate_token(token=token):
-            logger.error(f"Invalid token: {token}")
+            logger.error("Invalid token provided")
             raise AuthenticationError("Invalid token.")
         if not BaseMilvus._is_super_user(user_id=client_id):
             logger.error(f"User '{sanitize_for_log(client_id)}' is not a super user.")
@@ -203,7 +203,7 @@ class MilvusHelper(BaseMilvus):
             f"Resetting password for tenant '{sanitize_for_log(request.tenant_code)}'"
         )
         if not BaseMilvus._validate_token(token=token):
-            logger.error(f"Invalid token: {token}")
+            logger.error("Invalid token provided")
             raise AuthenticationError("Invalid token.")
         if not BaseMilvus._is_super_user(user_id=client_id):
             logger.error(f"User '{sanitize_for_log(client_id)}' is not a super user.")
@@ -250,7 +250,7 @@ class MilvusHelper(BaseMilvus):
             f"Setting up vector store for tenant '{sanitize_for_log(tenant_code)}' with client_id '{sanitize_for_log(client_id)}'."
         )
         if not BaseMilvus._validate_token(token=token):
-            logger.error(f"Invalid token: {token}")
+            logger.error("Invalid token provided")
             raise AuthenticationError("Invalid token.")
         if not BaseMilvus._is_super_user(user_id=client_id):
             logger.error(f"User '{sanitize_for_log(client_id)}' is not a super user.")
@@ -301,7 +301,7 @@ class MilvusHelper(BaseMilvus):
         )
 
         if not BaseMilvus._validate_token(token=token):
-            logger.error(f"Invalid token: {token}")
+            logger.error("Invalid token provided")
             raise AuthenticationError("Invalid token.")
         if not BaseMilvus._is_super_user(user_id=client_id):
             logger.error(f"User '{sanitize_for_log(client_id)}' is not a super user.")

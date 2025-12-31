@@ -1,51 +1,73 @@
 # Build stage
 FROM python:3.11-slim AS builder
 
-# Install build dependencies
+# Keep pip lean and avoid .pyc files to shrink copy size
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Install build dependencies only in the builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential gcc g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies
-COPY app/requirements.txt /tmp/
-RUN pip install --no-cache-dir --user -r /tmp/requirements.txt
+# Create isolated venv for runtime reuse
+RUN python -m venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
+
+# Upgrade pip to fix CVE vulnerabilities (pip <=25.2 affected) with minimal deps
+RUN python -m pip install --no-deps --upgrade "pip>=25.3"
+
+# Copy and install Python dependencies into the venv
+COPY app/requirements.txt /tmp/requirements.txt
+RUN python -m pip install --no-compile -r /tmp/requirements.txt && \
+    # Strip unnecessary files to reduce size
+    find /opt/venv -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
+    find /opt/venv -type d -name "test" -exec rm -rf {} + 2>/dev/null || true && \
+    find /opt/venv -type f -name "*.pyo" -delete && \
+    find /opt/venv -type f -name "*.pyc" -delete && \
+    find /opt/venv -type f -name "*.exe" -delete && \
+    find /opt/venv -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true && \
+    rm -rf /opt/venv/lib/python3.11/site-packages/pip/_vendor/distlib/*.exe
 
 # Runtime stage
 FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/flouds-vector \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
     FLOUDS_API_ENV=Production \
     APP_DEBUG_MODE=0 \
     FLOUDS_LOG_PATH=/flouds-vector/logs \
     FLOUDS_APP_SECRETS=/flouds-vector/secrets \
-    PATH=/root/.local/bin:$PATH
+    PATH=/opt/venv/bin:$PATH
 
-# Install only runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    netcat-openbsd curl \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# Purge tar if present to avoid CVE; keep runtime minimal
+RUN apt-get update && \
+    apt-get purge -y --auto-remove tar || true && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Copy Python packages from builder
-COPY --from=builder /root/.local /root/.local
+# Copy prebuilt venv from builder
+COPY --from=builder /opt/venv /opt/venv
 
-WORKDIR /flouds-vector
+WORKDIR ${PYTHONPATH}
 
 # Copy application code
 COPY app ./app
 
-# Create required directories and cleanup
+# Create required directories
 RUN mkdir -p $FLOUDS_APP_SECRETS $FLOUDS_LOG_PATH && \
     chmod 755 $FLOUDS_APP_SECRETS && \
-    chmod 777 $FLOUDS_LOG_PATH && \
-    find /root/.local -name "*.pyc" -delete && \
-    find /root/.local -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    chmod 777 $FLOUDS_LOG_PATH
 
 EXPOSE 19680
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:19680/health || exit 1
+# Add health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python /flouds-vector/app/healthcheck.py || exit 1
 
 CMD ["python", "-m", "app.main"]

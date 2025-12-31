@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from app.app_init import APP_SETTINGS
 from app.config.startup_validator import validate_startup_config
@@ -116,6 +117,12 @@ def root() -> dict:
     return {"message": "Flouds Vector API is running"}
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    """Return empty favicon to prevent 404 errors in browsers."""
+    return Response(status_code=204)
+
+
 def signal_handler(signum: int, frame) -> None:
     """
     Handle shutdown signals gracefully.
@@ -177,5 +184,6 @@ if __name__ == "__main__":
         sys.exit(1)
 
 # Run Instruction
+# Set Env: $env:FLOUDS_API_ENV="Development"
 # Unit Test : python -m pytest
 # Run for terminal: python -m app.main

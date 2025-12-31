@@ -4,15 +4,16 @@ __pycache__/
 *.so
 *.pyd
 *.pyo
+*.pyc
 
 # Environment files
 .env*
 *.env*
 
 # Configuration files (keep only production config)
-appsettings.development.json
-appsettings.*.json
-!appsettings.json
+app/config/appsettings.development.json
+app/config/appsettings.*.json
+!app/config/appsettings.json
 
 # Logs and test output
 *.log
@@ -63,14 +64,19 @@ docker-compose*.yml
 LICENSE*
 CONTRIBUTING.md
 SECURITY.md
+docs/
+examples/
 
 # Development files
 tests/
 test_*/
 *_test.py
+conftest.py
+pytest.ini
 requirements-dev.txt
 .pre-commit-config.yaml
 .github/
+pyproject.toml
 
 # Milvus standalone files
 milvus/
@@ -90,3 +96,9 @@ desktop.ini
 # Additional exclusions
 secrets/
 installed_packages.txt
+add_header.py
+clean_proj.bat
+build-flouds-vector.ps1
+start-flouds-vectordb.ps1
+start-flouds-vectordb.sh
+Dockerfile.txt
