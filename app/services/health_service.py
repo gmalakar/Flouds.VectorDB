@@ -24,12 +24,17 @@ SERVICE_START_TIME = time()
 class HealthService:
     """
     Service for health check operations.
+
+    Provides methods to check the health of Milvus, system resources, and configuration.
     """
 
     @classmethod
     def get_health_status(cls) -> HealthResponse:
         """
-        Performs comprehensive health check and returns status.
+        Perform a comprehensive health check and return status.
+
+        Returns:
+            HealthResponse: Health status and details for all components.
         """
         components = {}
         details = {}
@@ -72,7 +77,10 @@ class HealthService:
     @classmethod
     def _check_milvus(cls) -> tuple[str, dict]:
         """
-        Check Milvus database connectivity with details.
+        Check Milvus database connectivity and return status and details.
+
+        Returns:
+            tuple[str, dict]: (status, details) for Milvus connection.
         """
         details = {
             "endpoint": APP_SETTINGS.vectordb.endpoint,
@@ -119,7 +127,10 @@ class HealthService:
     @classmethod
     def _check_system_resources(cls) -> tuple[str, dict]:
         """
-        Check system resource usage.
+        Check system resource usage (CPU, memory, disk) and return status and details.
+
+        Returns:
+            tuple[str, dict]: (status, details) for system resources.
         """
         try:
             cpu_percent = psutil.cpu_percent(interval=0.1)
@@ -155,7 +166,10 @@ class HealthService:
     @classmethod
     def _check_configuration(cls) -> tuple[str, dict]:
         """
-        Check configuration validity.
+        Check configuration validity and return status and details.
+
+        Returns:
+            tuple[str, dict]: (status, details) for configuration validity.
         """
         details = {}
         issues = []

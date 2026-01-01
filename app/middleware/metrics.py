@@ -17,14 +17,38 @@ logger = get_logger("metrics")
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, max_samples=1000, max_endpoints=100):
+    """
+    Middleware for collecting and logging request metrics in FastAPI applications.
+
+    Tracks request counts, processing times, and logs slow requests.
+    """
+
+    def __init__(self, app, max_samples: int = 1000, max_endpoints: int = 100):
+        """
+        Initialize the MetricsMiddleware.
+
+        Args:
+            app: The FastAPI application instance.
+            max_samples (int, optional): Maximum samples to keep per endpoint. Defaults to 1000.
+            max_endpoints (int, optional): Maximum number of endpoints to track. Defaults to 100.
+        """
         super().__init__(app)
         self.max_samples = max_samples
         self.max_endpoints = max_endpoints
         self.request_count = defaultdict(int)
         self.request_times = defaultdict(lambda: deque(maxlen=self.max_samples))
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next) -> object:
+        """
+        Intercept requests to collect metrics and log slow requests.
+
+        Args:
+            request (Request): The incoming HTTP request.
+            call_next (Callable): The next middleware or route handler.
+
+        Returns:
+            Response: The HTTP response, with metrics headers added.
+        """
         start_time = time.time()
 
         response = await call_next(request)

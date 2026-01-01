@@ -12,9 +12,12 @@ from app.logger import get_logger
 logger = get_logger("startup_validator")
 
 
-def validate_startup_config():
+def validate_startup_config() -> None:
     """
     Validates configuration at startup and exits if invalid.
+
+    Returns:
+        None
     """
     try:
         validate_config()

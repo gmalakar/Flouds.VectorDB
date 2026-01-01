@@ -4,9 +4,11 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 
+import logging
+from functools import lru_cache
 from json import JSONDecodeError, dumps, loads
 from threading import Lock
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pymilvus import MilvusClient, MilvusException
 
@@ -81,6 +83,19 @@ class VectorStore(BaseMilvus):
         model_name: str,
         vector_dimension: int = 0,
     ):
+        """
+        Initialize a thread-safe VectorStore for a tenant.
+
+        Args:
+            tenant_code (str): The tenant code.
+            user_id (str): The user ID.
+            password (str): The user's password.
+            model_name (str): The model name.
+            vector_dimension (int, optional): The vector dimension. Defaults to 0 (uses default).
+
+        Raises:
+            VectorStoreError: If required parameters are missing.
+        """
         logger.debug(
             f"Initializing VectorStore for tenant '{sanitize_for_log(tenant_code)}' with user '{sanitize_for_log(user_id)}' and model '{sanitize_for_log(model_name)}'"
         )
@@ -119,7 +134,10 @@ class VectorStore(BaseMilvus):
 
     def _get_tenant_client(self) -> MilvusClient:
         """
-        Returns a pooled MilvusClient for this tenant.
+        Get a pooled MilvusClient for this tenant.
+
+        Returns:
+            MilvusClient: The pooled client instance.
         """
         return milvus_pool.get_connection(
             uri=BaseMilvus._get_milvus_url(),
@@ -130,7 +148,15 @@ class VectorStore(BaseMilvus):
 
     @staticmethod
     def _convert_sparse_to_dict(sparse_vec) -> dict:
-        """Convert scipy sparse vector to dictionary format for Milvus."""
+        """
+        Convert a scipy sparse vector to dictionary format for Milvus.
+
+        Args:
+            sparse_vec: The sparse vector (scipy format).
+
+        Returns:
+            dict: Dictionary representation for Milvus.
+        """
         if hasattr(sparse_vec, "tocoo"):
             coo = sparse_vec.tocoo()
             return {int(idx): float(val) for idx, val in zip(coo.col, coo.data)}
@@ -138,7 +164,15 @@ class VectorStore(BaseMilvus):
 
     @staticmethod
     def _generate_sparse_vectors(chunks: List[str]) -> List[dict]:
-        """Generate sparse vectors for chunks using BM25."""
+        """
+        Generate sparse vectors for chunks using BM25.
+
+        Args:
+            chunks (List[str]): List of text chunks.
+
+        Returns:
+            List[dict]: List of sparse vector dictionaries.
+        """
         if not (_bm25_available and _bm25_embedder and has_sparse_field):
             return [{}] * len(chunks)
 
@@ -162,7 +196,12 @@ class VectorStore(BaseMilvus):
             return [{}] * len(chunks)
 
     def _ensure_collection_ready(self) -> None:
-        """Check if collection exists and load it, raise error if not found."""
+        """
+        Check if collection exists and load it, raise error if not found.
+
+        Raises:
+            CollectionError: If the collection does not exist.
+        """
         client = self._get_tenant_client()
         if not client.has_collection(self._store_name):
             raise CollectionError(
@@ -172,7 +211,15 @@ class VectorStore(BaseMilvus):
 
     @staticmethod
     def __convert_to_field_data(embedded_vectors: List[EmbeddedVector]) -> List[dict]:
-        """Converts a list of EmbeddedVector objects to Milvus upsert-ready dicts."""
+        """
+        Convert a list of EmbeddedVector objects to Milvus upsert-ready dicts.
+
+        Args:
+            embedded_vectors (List[EmbeddedVector]): List of embedded vectors.
+
+        Returns:
+            List[dict]: List of dicts ready for Milvus upsert.
+        """
         vector_field_name = BaseMilvus._get_vector_field_name()
         primary_key_name = BaseMilvus._get_primary_key_name()
         chunks = [embedded_vec.chunk for embedded_vec in embedded_vectors]
@@ -193,42 +240,77 @@ class VectorStore(BaseMilvus):
         self, embedded_vectors: List[EmbeddedVector], **kwargs: Any
     ) -> None:
         """
-        Upserts embedded vectors into the Milvus collection for this tenant.
-        Thread-safe. Flush behavior is configurable via auto_flush parameter.
+        Upsert embedded vectors into the Milvus collection for this tenant (thread-safe).
+
+        Args:
+            embedded_vectors (List[EmbeddedVector]): List of vectors to upsert.
+            **kwargs: Additional keyword arguments (e.g., auto_flush, partition_name).
+
+        Returns:
+            None
+
+        Raises:
+            VectorStoreError: If upsert fails.
         """
+        import time
+
         try:
+            t0 = time.perf_counter()
             primary_key_name = BaseMilvus._get_primary_key_name()
-            logger.debug(f"Primary key name for upsert: {primary_key_name}")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Primary key name for upsert: {primary_key_name}")
 
             logger.info(
                 f"Upserting {len(embedded_vectors)} vectors into Milvus collection '{self._store_name}'"
             )
             self._ensure_collection_ready()
-            logger.debug(
-                f"Setting collection for tenant '{self._tenant_code}' with user '{self._user_id}'"
-            )
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    f"Setting collection for tenant '{self._tenant_code}' with user '{self._user_id}'"
+                )
             client = self._get_tenant_client()
-            logger.debug(f"Using tenant client for collection '{self._store_name}'")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Using tenant client for collection '{self._store_name}'")
 
+            t1 = time.perf_counter()
             data_to_upsert = self.__convert_to_field_data(embedded_vectors)
+            t2 = time.perf_counter()
 
+            upsert_start = time.perf_counter()
             client.upsert(
                 collection_name=self._store_name,
                 data=data_to_upsert,
                 partition_name=kwargs.get("partition_name", ""),
             )
+            upsert_end = time.perf_counter()
 
             logger.info(
                 f"Successfully upserted {len(embedded_vectors)} vectors into Milvus collection '{self._store_name}'"
             )
 
             # Only flush if explicitly requested or for large batches
-            should_auto_flush = kwargs.get("auto_flush", len(embedded_vectors) >= 100)
+            threshold = APP_SETTINGS.vectordb.auto_flush_min_batch
+            if threshold == 0:
+                auto_flush_default = True
+            elif threshold > 0:
+                auto_flush_default = len(embedded_vectors) >= threshold
+            else:
+                auto_flush_default = False
+            should_auto_flush = kwargs.get("auto_flush", auto_flush_default)
+            flush_time = None
             if should_auto_flush:
+                flush_start = time.perf_counter()
                 client.flush(self._store_name)
-                logger.debug(
-                    f"Flushed collection '{self._store_name}' after inserting {len(embedded_vectors)} vectors"
-                )
+                flush_end = time.perf_counter()
+                flush_time = flush_end - flush_start
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(
+                        f"Flushed collection '{self._store_name}' after inserting {len(embedded_vectors)} vectors in {flush_time:.4f}s"
+                    )
+
+            logger.info(
+                f"Insert timing: setup={t1-t0:.4f}s, convert={t2-t1:.4f}s, upsert={upsert_end-upsert_start:.4f}s, flush={'{:.4f}s'.format(flush_time) if flush_time is not None else 'N/A'}"
+            )
         except MilvusException as ex:
             logger.exception(f"Milvus error upserting data into collection: {ex}")
             raise VectorStoreError(
@@ -251,6 +333,12 @@ class VectorStore(BaseMilvus):
         """
         Manually flush the collection to ensure data persistence.
         Useful for batch operations where auto_flush is disabled.
+
+        Returns:
+            None
+
+        Raises:
+            VectorStoreError: If flush fails.
         """
         try:
             client = self._get_tenant_client()
@@ -264,7 +352,15 @@ class VectorStore(BaseMilvus):
             raise VectorStoreError("Error flushing collection") from ex
 
     def _get_search_setup(self, request: SearchEmbeddedRequest):
-        """Common search setup for both dense and hybrid search."""
+        """
+        Common search setup for both dense and hybrid search.
+
+        Args:
+            request (SearchEmbeddedRequest): The search request.
+
+        Returns:
+            Tuple[MilvusClient, str, Any]: (client, vector_field_name, filter_expr)
+        """
         self._ensure_collection_ready()
         client = self._get_tenant_client()
         vector_field_name = BaseMilvus._get_vector_field_name()
@@ -275,7 +371,16 @@ class VectorStore(BaseMilvus):
     def _build_base_search_params(
         self, request: SearchEmbeddedRequest, search_limit: int
     ) -> dict:
-        """Build base search parameters common to both search types."""
+        """
+        Build base search parameters common to both search types.
+
+        Args:
+            request (SearchEmbeddedRequest): The search request.
+            search_limit (int): The search result limit.
+
+        Returns:
+            dict: Search parameters.
+        """
         return {
             "limit": min(search_limit, 100),
             "offset": request.offset or 0,
@@ -288,13 +393,22 @@ class VectorStore(BaseMilvus):
         self, search_request: SearchEmbeddedRequest, **kwargs
     ) -> List[EmbeddedMeta]:
         """
-        Searches for embedded data in the tenant's vector store.
-        Returns a list of EmbeddedMeta results.
-        Thread-safe.
+        Search for embedded data in the tenant's vector store (thread-safe).
+
+        Args:
+            search_request (SearchEmbeddedRequest): The search request.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            List[EmbeddedMeta]: List of search results.
         """
+        import time
+
+        t0 = time.perf_counter()
         milvus_client, vector_field_name, filter_expr = self._get_search_setup(
             search_request
         )
+        t1 = time.perf_counter()
 
         # Increase limit if text filtering is needed
         search_limit = search_request.limit or 5
@@ -324,12 +438,15 @@ class VectorStore(BaseMilvus):
             if key in kwargs:
                 search_params[key] = kwargs[key]
 
+        t2 = time.perf_counter()
+        search_start = time.perf_counter()
         search_results = milvus_client.search(
             collection_name=self._store_name,
             data=[search_request.vector],
             anns_field=vector_field_name,
             **search_params,
         )
+        search_end = time.perf_counter()
 
         # Fast result processing
         filtered_results = []
@@ -375,6 +492,12 @@ class VectorStore(BaseMilvus):
                         else chunk_metadata
                     )
 
+                # Apply metadata filter if provided
+                if not self._matches_meta_filter(
+                    chunk_metadata, getattr(search_request, "meta_filter", None)
+                ):
+                    continue
+
                 filtered_results.append(
                     EmbeddedMeta(content=chunk_content, meta=chunk_metadata)
                 )
@@ -384,17 +507,28 @@ class VectorStore(BaseMilvus):
         if len(filtered_results) > original_limit:
             filtered_results = filtered_results[:original_limit]
 
-        logger.debug(
-            f"Retrieved {len(filtered_results)} results from vector store '{self._store_name}'"
-        )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"Retrieved {len(filtered_results)} results from vector store '{self._store_name}'"
+            )
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(
+                f"Search timing: setup={t1-t0:.4f}s, param_build={t2-t1:.4f}s, milvus_search={search_end-search_start:.4f}s, results={len(filtered_results)}"
+            )
         return filtered_results
 
     def hybrid_search_store(
         self, search_request: SearchEmbeddedRequest, **kwargs
     ) -> List[EmbeddedMeta]:
         """
-        Performs hybrid search using both dense and sparse vectors.
-        Combines results from both searches.
+        Perform hybrid search using both dense and sparse vectors. Combines results from both searches.
+
+        Args:
+            search_request (SearchEmbeddedRequest): The search request.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            List[EmbeddedMeta]: List of hybrid search results.
         """
         milvus_client, vector_field_name, filter_expr = self._get_search_setup(
             search_request
@@ -432,55 +566,73 @@ class VectorStore(BaseMilvus):
             and _bm25_embedder
             and has_sparse_field
         ):
-            try:
-                sparse_result = _bm25_embedder.encode_queries([text_filter])[0]
-                # Convert sparse query to dict format
-                if hasattr(sparse_result, "tocoo"):
-                    coo = sparse_result.tocoo()
-                    sparse_query = {
-                        int(idx): float(val) for idx, val in zip(coo.col, coo.data)
-                    }
-                else:
-                    sparse_query = {}
+            sparse_query = self._encode_sparse_query_cached(text_filter)
+            if sparse_query is not None:
                 sparse_search_params = base_search_params.copy()
                 sparse_search_params["search_params"] = {
                     "metric_type": "IP",
                     "params": {},
                 }
 
-                sparse_results = milvus_client.search(
-                    collection_name=self._store_name,
-                    data=[sparse_query],
-                    anns_field="sparse_vector",
-                    **sparse_search_params,
-                )
-            except (ImportError, AttributeError) as e:
-                logger.warning(
-                    f"BM25 functionality not available for sparse search: {e}"
-                )
-                sparse_results = None
-            except MilvusException as e:
-                logger.warning(f"Milvus error during sparse vector search: {e}")
-                sparse_results = None
-            except Exception as e:
-                logger.warning(f"Unexpected error during sparse vector search: {e}")
-                sparse_results = None
+                try:
+                    sparse_results = milvus_client.search(
+                        collection_name=self._store_name,
+                        data=[sparse_query],
+                        anns_field="sparse_vector",
+                        **sparse_search_params,
+                    )
+                except MilvusException as e:
+                    logger.warning(f"Milvus error during sparse vector search: {e}")
+                    sparse_results = None
+                except Exception as e:
+                    logger.warning(f"Unexpected error during sparse vector search: {e}")
+                    sparse_results = None
 
         # Combine and deduplicate results
         combined_results = self._combine_hybrid_results(
             dense_results, sparse_results, search_request
         )
 
-        logger.debug(
-            f"Retrieved {len(combined_results)} hybrid results from vector store '{self._store_name}'"
-        )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"Retrieved {len(combined_results)} hybrid results from vector store '{self._store_name}'"
+            )
         return combined_results
+
+    @staticmethod
+    @lru_cache(maxsize=256)
+    def _encode_sparse_query_cached(text_filter: str):
+        """Cache BM25 sparse query encoding to avoid repeated computation on identical filters."""
+        try:
+            if not (_bm25_available and _bm25_embedder and has_sparse_field):
+                return None
+            sparse_result = _bm25_embedder.encode_queries([text_filter])[0]
+            if hasattr(sparse_result, "tocoo"):
+                coo = sparse_result.tocoo()
+                return {int(idx): float(val) for idx, val in zip(coo.col, coo.data)}
+            return {}
+        except (ImportError, AttributeError):
+            return None
+        except Exception as e:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    f"BM25 sparse encode failed for filter: {sanitize_for_log(text_filter)} | {e}"
+                )
+            return None
 
     def _combine_hybrid_results(
         self, dense_results, sparse_results, search_request: SearchEmbeddedRequest
     ) -> List[EmbeddedMeta]:
         """
-        Combines dense and sparse search results using Reciprocal Rank Fusion (RRF).
+        Combine dense and sparse search results using Reciprocal Rank Fusion (RRF).
+
+        Args:
+            dense_results: Dense search results.
+            sparse_results: Sparse search results.
+            search_request (SearchEmbeddedRequest): The search request.
+
+        Returns:
+            List[EmbeddedMeta]: Combined search results.
         """
         # Collect results with scores and ranks
         dense_scores = {}
@@ -511,6 +663,7 @@ class VectorStore(BaseMilvus):
 
         combined_results = []
         score_threshold = getattr(search_request, "score_threshold", None)
+        meta_filter = getattr(search_request, "meta_filter", None)
 
         for key, _ in sorted_items:
             search_hit = all_items[key]
@@ -527,10 +680,15 @@ class VectorStore(BaseMilvus):
             chunk_metadata = self._process_meta(
                 search_hit.entity.get("meta", "{}"), search_request
             )
-            if chunk_metadata is not None:
-                combined_results.append(
-                    EmbeddedMeta(content=chunk_content, meta=chunk_metadata)
-                )
+            if chunk_metadata is None:
+                continue
+
+            if not self._matches_meta_filter(chunk_metadata, meta_filter):
+                continue
+
+            combined_results.append(
+                EmbeddedMeta(content=chunk_content, meta=chunk_metadata)
+            )
 
         # Limit final results
         original_limit = search_request.limit or 5
@@ -538,8 +696,17 @@ class VectorStore(BaseMilvus):
 
     def _calculate_rrf_scores(self, dense_scores, sparse_scores, k=60):
         """
-        Calculate Reciprocal Rank Fusion scores.
+        Calculate Reciprocal Rank Fusion (RRF) scores.
+
         RRF(d) = sum(1 / (k + rank(d, q))) for all queries q
+
+        Args:
+            dense_scores (dict): Dense result scores.
+            sparse_scores (dict): Sparse result scores.
+            k (int, optional): RRF parameter. Defaults to 60.
+
+        Returns:
+            dict: RRF scores for each key.
         """
         # Pre-calculate reciprocal values to avoid repeated division
         k_float = float(k)
@@ -557,7 +724,17 @@ class VectorStore(BaseMilvus):
         return rrf_scores
 
     def _apply_text_filter(self, text_filter, chunk_content, search_request) -> bool:
-        """Apply text filter if provided."""
+        """
+        Apply text filter if provided.
+
+        Args:
+            text_filter (str): The text filter string.
+            chunk_content (str): The chunk content.
+            search_request: The search request object.
+
+        Returns:
+            bool: True if filter matches, False otherwise.
+        """
         if text_filter and text_filter.strip():
             minimum_words_match = getattr(search_request, "minimum_words_match", 1)
             include_stop_words = getattr(search_request, "include_stop_words", False)
@@ -567,7 +744,16 @@ class VectorStore(BaseMilvus):
         return True
 
     def _process_meta(self, chunk_metadata, search_request):
-        """Process metadata based on requirements."""
+        """
+        Process metadata based on requirements.
+
+        Args:
+            chunk_metadata: The chunk metadata (str or dict).
+            search_request: The search request object.
+
+        Returns:
+            dict or None: Parsed metadata or None if not required/invalid.
+        """
         if search_request.meta_required:
             parsed_metadata = self._parse_meta(chunk_metadata)
             if not parsed_metadata or parsed_metadata == {}:
@@ -580,6 +766,23 @@ class VectorStore(BaseMilvus):
         )
 
     @staticmethod
+    def _matches_meta_filter(
+        meta: Optional[Dict[str, Any]], meta_filter: Optional[Dict[str, str]]
+    ) -> bool:
+        """Check simple case-insensitive substring matches for provided meta filters."""
+        if not meta_filter:
+            return True
+        if not meta or not isinstance(meta, dict):
+            return False
+        for key, expected in meta_filter.items():
+            value = meta.get(key)
+            if value is None:
+                return False
+            if expected.lower() not in str(value).lower():
+                return False
+        return True
+
+    @staticmethod
     def _matches_text_filter(
         text_filter: str,
         chunk: str,
@@ -588,6 +791,15 @@ class VectorStore(BaseMilvus):
     ) -> bool:
         """
         Check if chunk matches text filter based on word matching criteria.
+
+        Args:
+            text_filter (str): The text filter string.
+            chunk (str): The chunk content.
+            minimum_words_match (int, optional): Minimum words to match. Defaults to 1.
+            include_stop_words (bool, optional): Whether to include stop words. Defaults to False.
+
+        Returns:
+            bool: True if filter matches, False otherwise.
         """
         stop_words = get_stopwords()
 
@@ -626,6 +838,12 @@ class VectorStore(BaseMilvus):
     def _parse_meta(meta):
         """
         Robustly parse meta field from string or dict.
+
+        Args:
+            meta (str or dict): The meta field.
+
+        Returns:
+            dict: Parsed metadata dictionary (empty if invalid).
         """
         if isinstance(meta, str):
             try:

@@ -7,6 +7,7 @@
 from threading import Lock
 from typing import Any, List, Tuple
 
+from app.app_init import APP_SETTINGS
 from app.exceptions.custom_exceptions import (
     AuthenticationError,
     MilvusConnectionError,
@@ -39,14 +40,25 @@ class MilvusHelper(BaseMilvus):
     __vector_stores: ConcurrentDict = ConcurrentDict("_vector_stores")
 
     def __init__(self) -> None:
+        """
+        Initialize the MilvusHelper instance and its base class.
+
+        Returns:
+            None
+        """
         logger.debug("Initializing MilvusHelper...")
         super().__init__()
 
     @classmethod
     def initialize(cls, **kwargs: Any) -> None:
         """
-        Initializes the Milvus admin client and sets configuration.
-        Thread-safe.
+        Initialize the Milvus admin client and set configuration (thread-safe).
+
+        Args:
+            **kwargs: Additional keyword arguments for initialization.
+
+        Returns:
+            None
         """
         with cls.__mhelper_init_lock:
             if not cls.__mhelper_initialized:
@@ -69,18 +81,24 @@ class MilvusHelper(BaseMilvus):
         **kwargs: Any,
     ) -> int:
         """
-        Inserts embedded vectors into the tenant's vector store.
+        Insert embedded vectors into the tenant's vector store.
+
+        Args:
+            request (InsertEmbeddedRequest): The request containing data to insert.
+            token (str): The authentication token.
+            **kwargs: Additional keyword arguments.
 
         Returns:
             int: Number of vectors inserted.
+
         Raises:
             AuthenticationError: If token is invalid.
             ValidationError: If database or collection doesn't exist.
         """
         client_id, secret_key = MilvusHelper._split_token(token)
         if not BaseMilvus._validate_token(token=token):
-            logger.error("Invalid token provided")
-            raise AuthenticationError("Invalid token.")
+            logger.error("Invalid database token provided")
+            raise AuthenticationError("Invalid database token.")
 
         # Check if database exists
         if not BaseMilvus._check_database_exists(request.tenant_code):
@@ -102,12 +120,16 @@ class MilvusHelper(BaseMilvus):
         logger.debug(
             f"Inserting {len(request.data)} embedded vectors into vector store for tenant '{sanitize_for_log(request.tenant_code)}' with model '{sanitize_for_log(request.model_name)}'."
         )
-        # Optimize flush behavior based on batch size
+        # Optimize flush behavior based on configurable batch size
         batch_size = len(request.data)
-        if batch_size >= 100:
-            kwargs["auto_flush"] = True
+        threshold = APP_SETTINGS.vectordb.auto_flush_min_batch
+        if threshold == 0:
+            auto_flush_by_size = True
+        elif threshold > 0:
+            auto_flush_by_size = batch_size >= threshold
         else:
-            kwargs["auto_flush"] = kwargs.get("force_flush", False)
+            auto_flush_by_size = False
+        kwargs["auto_flush"] = kwargs.get("force_flush", auto_flush_by_size)
 
         tenant_store.insert_data(request.data, **kwargs)
         return len(request.data)
@@ -117,18 +139,24 @@ class MilvusHelper(BaseMilvus):
         request: SearchEmbeddedRequest, token: str, **kwargs: Any
     ) -> List[EmbeddedMeta]:
         """
-        Searches for embedded data in the tenant's vector store.
+        Search for embedded data in the tenant's vector store.
+
+        Args:
+            request (SearchEmbeddedRequest): The search request.
+            token (str): The authentication token.
+            **kwargs: Additional keyword arguments.
 
         Returns:
             List[EmbeddedMeta]: Search results.
+
         Raises:
             AuthenticationError: If token is invalid.
             ValidationError: If database or collection doesn't exist.
         """
         client_id, secret_key = MilvusHelper._split_token(token)
         if not BaseMilvus._validate_token(token=token):
-            logger.error("Invalid token provided")
-            raise AuthenticationError("Invalid token.")
+            logger.error("Invalid database token provided")
+            raise AuthenticationError("Invalid database token.")
 
         # Check if database exists
         if not BaseMilvus._check_database_exists(request.tenant_code):
@@ -157,11 +185,17 @@ class MilvusHelper(BaseMilvus):
     @staticmethod
     def set_user(request: SetUserRequest, token: str, **kwargs: Any) -> dict:
         """
-        Sets up a user for a tenant, creating all necessary resources if missing.
+        Set up a user for a tenant, creating all necessary resources if missing.
         Only super users can perform this operation.
+
+        Args:
+            request (SetUserRequest): The user setup request.
+            token (str): The authentication token.
+            **kwargs: Additional keyword arguments.
 
         Returns:
             dict: Summary of user setup.
+
         Raises:
             AuthenticationError: If token is invalid or user is not a super user.
         """
@@ -170,8 +204,8 @@ class MilvusHelper(BaseMilvus):
             f"Setting up user for tenant '{sanitize_for_log(request.tenant_code)}'"
         )
         if not BaseMilvus._validate_token(token=token):
-            logger.error("Invalid token provided")
-            raise AuthenticationError("Invalid token.")
+            logger.error("Invalid database token provided")
+            raise AuthenticationError("Invalid database token.")
         if not BaseMilvus._is_super_user(user_id=client_id):
             logger.error(f"User '{sanitize_for_log(client_id)}' is not a super user.")
             raise AuthenticationError(
@@ -190,11 +224,16 @@ class MilvusHelper(BaseMilvus):
         request: ResetPasswordRequest, token: str, **kwargs: Any
     ) -> ResetPasswordResponse:
         """
-        Resets the password for a user in a tenant.
-        Only super users can perform this operation.
+        Reset the password for a user in a tenant. Only super users can perform this operation.
+
+        Args:
+            request (ResetPasswordRequest): The password reset request.
+            token (str): The authentication token.
+            **kwargs: Additional keyword arguments.
 
         Returns:
             ResetPasswordResponse: Password reset result.
+
         Raises:
             AuthenticationError: If token is invalid or user is not a super user.
         """
@@ -203,8 +242,8 @@ class MilvusHelper(BaseMilvus):
             f"Resetting password for tenant '{sanitize_for_log(request.tenant_code)}'"
         )
         if not BaseMilvus._validate_token(token=token):
-            logger.error("Invalid token provided")
-            raise AuthenticationError("Invalid token.")
+            logger.error("Invalid database token provided")
+            raise AuthenticationError("Invalid database token.")
         if not BaseMilvus._is_super_user(user_id=client_id):
             logger.error(f"User '{sanitize_for_log(client_id)}' is not a super user.")
             raise AuthenticationError(
@@ -219,39 +258,61 @@ class MilvusHelper(BaseMilvus):
     @staticmethod
     def _split_token(token: str) -> Tuple[str, str]:
         """
-        Splits a token into user_id and password.
+        Split a token into user_id and password.
+
+        Supports both 'user_id:password' and 'user_id|password' formats.
+
+        Args:
+            token (str): The authentication token.
 
         Returns:
             Tuple[str, str]: (user_id, password)
+
         Raises:
-            ValueError: If token format is invalid.
+            ValidationError: If token format is invalid.
         """
-        try:
-            user_id, password = token.split(":", 1)
-            return user_id, password
-        except ValueError:
-            raise ValidationError("Invalid token format. Expected 'user_id:password'.")
+        # Remove 'Bearer ' prefix if present
+        if token.startswith("Bearer "):
+            token = token[7:].strip()
+        # Replace '|' with ':' for Milvus compatibility
+        token = token.replace("|", ":")
+        if ":" in token:
+            parts = token.split(":", 1)
+        else:
+            raise ValidationError(
+                "Invalid database token format. Expected 'user_id:password' or 'user_id|password'."
+            )
+        if len(parts) != 2 or not parts[0] or not parts[1]:
+            raise ValidationError(
+                "Invalid database token format. Expected 'user_id:password' or 'user_id|password'."
+            )
+        return parts[0], parts[1]
 
     @staticmethod
     def set_vector_store(tenant_code: str, token: str, **kwargs: Any) -> dict[str, Any]:
         """
-        Sets up database, user, role, and permissions for a tenant.
-        Does NOT create collections or indexes.
+        Set up database, user, role, and permissions for a tenant. Does NOT create collections or indexes.
+
+        Args:
+            tenant_code (str): The tenant code.
+            token (str): The authentication token.
+            **kwargs: Additional keyword arguments.
 
         Returns:
             dict[str, Any]: Summary of the setup operation.
+
         Raises:
-            ValueError: If the token or tenant_code is invalid.
-            PermissionError: If the user is not a super user.
-            Exception: If initialization has not been performed.
+            AuthenticationError: If the token is invalid or user is not a super user.
+            ValidationError: If the tenant_code is missing.
+            VectorStoreError: If initialization has not been performed.
         """
         client_id, secret_key = MilvusHelper._split_token(token)
         logger.debug(
             f"Setting up vector store for tenant '{sanitize_for_log(tenant_code)}' with client_id '{sanitize_for_log(client_id)}'."
         )
         if not BaseMilvus._validate_token(token=token):
-            logger.error("Invalid token provided")
-            raise AuthenticationError("Invalid token.")
+            logger.error("Invalid database token provided")
+            raise AuthenticationError("Invalid database token.")
         if not BaseMilvus._is_super_user(user_id=client_id):
             logger.error(f"User '{sanitize_for_log(client_id)}' is not a super user.")
             raise AuthenticationError("User is not a super user.")
@@ -286,10 +347,23 @@ class MilvusHelper(BaseMilvus):
         **kwargs: Any,
     ) -> dict[str, Any]:
         """
-        Generates a custom schema for a tenant with specified parameters.
+        Generate a custom schema for a tenant with specified parameters.
+
+        Args:
+            tenant_code (str): The tenant code.
+            model_name (str): The model name.
+            dimension (int): The vector dimension.
+            nlist (int): Number of clusters for IVF index.
+            metric_type (str): Metric type for index.
+            index_type (str): Index type.
+            metadata_length (int): Metadata max length.
+            drop_ratio_build (float): Drop ratio for sparse index.
+            token (str): The authentication token.
+            **kwargs: Additional keyword arguments.
 
         Returns:
             dict[str, Any]: Summary of the schema generation operation.
+
         Raises:
             AuthenticationError: If token is invalid or user is not a super user.
             ValidationError: If required parameters are missing.
@@ -301,8 +375,8 @@ class MilvusHelper(BaseMilvus):
         )
 
         if not BaseMilvus._validate_token(token=token):
-            logger.error("Invalid token provided")
-            raise AuthenticationError("Invalid token.")
+            logger.error("Invalid database token provided")
+            raise AuthenticationError("Invalid database token.")
         if not BaseMilvus._is_super_user(user_id=client_id):
             logger.error(f"User '{sanitize_for_log(client_id)}' is not a super user.")
             raise AuthenticationError("User is not a super user.")
@@ -344,10 +418,18 @@ class MilvusHelper(BaseMilvus):
     def flush_tenant_collection(tenant_code: str, model_name: str, token: str) -> bool:
         """
         Manually flush a specific tenant's collection.
+
+        Args:
+            tenant_code (str): The tenant code.
+            model_name (str): The model name.
+            token (str): The authentication token.
+
+        Returns:
+            bool: True if flush succeeded, False otherwise.
         """
         client_id, secret_key = MilvusHelper._split_token(token)
         if not BaseMilvus._validate_token(token=token):
-            raise AuthenticationError("Invalid token.")
+            raise AuthenticationError("Invalid database token.")
 
         try:
             tenant_store = MilvusHelper.__get_or_add_current_volumes(
@@ -363,7 +445,13 @@ class MilvusHelper(BaseMilvus):
         tenant_id: str, user_id: str, password: str, model_name: str
     ) -> VectorStore:
         """
-        Gets or creates a VectorStore instance for the given tenant/user/model.
+        Get or create a VectorStore instance for the given tenant/user/model.
+
+        Args:
+            tenant_id (str): The tenant ID.
+            user_id (str): The user ID.
+            password (str): The user's password.
+            model_name (str): The model name.
 
         Returns:
             VectorStore: The vector store instance.

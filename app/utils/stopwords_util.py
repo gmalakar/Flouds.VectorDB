@@ -18,10 +18,10 @@ logger = get_logger("stopwords_util")
 
 def get_combined_stopwords() -> Set[str]:
     """
-    Get combined stopwords from NLTK and custom configuration file.
+    Get a combined set of stopwords from NLTK and a custom configuration file.
 
     Returns:
-        Set[str]: Combined set of stopwords
+        Set[str]: Combined set of stopwords from NLTK and additional config file.
     """
     # Get NLTK stopwords
     try:
@@ -67,10 +67,10 @@ _cached_stopwords = None
 
 def get_stopwords() -> Set[str]:
     """
-    Get cached combined stopwords.
+    Get cached combined stopwords for performance.
 
     Returns:
-        Set[str]: Cached combined stopwords
+        Set[str]: Cached combined stopwords.
     """
     global _cached_stopwords
     if _cached_stopwords is None:

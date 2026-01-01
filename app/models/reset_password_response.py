@@ -13,6 +13,11 @@ from app.models.base_response import BaseResponse
 class ResetPasswordResponse(BaseResponse):
     """
     Response model for password reset.
+
+    Attributes:
+        user_name (str): The username of the user requesting the password reset.
+        root_user (bool): Indicates whether the user is a root user.
+        reset_flag (bool): Indicates whether the password reset was successful.
     """
 
     user_name: str = Field(

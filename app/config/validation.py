@@ -15,7 +15,12 @@ logger = get_logger("config_validation")
 
 
 def validate_config() -> None:
-    """Validates the application configuration."""
+    """
+    Validates the application configuration.
+
+    Raises:
+        ValueError: If configuration validation fails.
+    """
     errors: List[str] = []
 
     # Validate server configuration
@@ -56,7 +61,12 @@ def validate_config() -> None:
 
 
 def _validate_server_config() -> List[str]:
-    """Validate server configuration."""
+    """
+    Validate server configuration.
+
+    Returns:
+        List[str]: List of error messages, empty if valid.
+    """
     errors = []
 
     # Get values from environment or config
@@ -80,7 +90,12 @@ def _validate_server_config() -> List[str]:
 
 
 def _validate_vectordb_config() -> List[str]:
-    """Validate vector database configuration."""
+    """
+    Validate vector database configuration.
+
+    Returns:
+        List[str]: List of error messages, empty if valid.
+    """
     errors = []
 
     if not APP_SETTINGS.vectordb:
@@ -145,7 +160,12 @@ def _validate_vectordb_config() -> List[str]:
 
 
 def _validate_security_config() -> List[str]:
-    """Validate security-related configuration."""
+    """
+    Validate security-related configuration.
+
+    Returns:
+        List[str]: List of error messages, empty if valid.
+    """
     errors = []
 
     if APP_SETTINGS.app.is_production:

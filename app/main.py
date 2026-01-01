@@ -9,6 +9,7 @@
 
 import signal
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -17,6 +18,7 @@ from fastapi.responses import Response
 
 from app.app_init import APP_SETTINGS
 from app.config.startup_validator import validate_startup_config
+from app.dependencies.auth import AuthMiddleware
 from app.exceptions.custom_exceptions import MilvusConnectionError
 from app.logger import get_logger
 from app.middleware.error_handler import ErrorHandlerMiddleware
@@ -30,6 +32,9 @@ from app.tasks.cleanup import cleanup_connections
 from app.utils.log_sanitizer import sanitize_for_log
 
 logger = get_logger("main")
+
+API_VERSION = "v1"
+API_PREFIX = f"/api/{API_VERSION}"
 
 
 @asynccontextmanager
@@ -45,6 +50,21 @@ async def lifespan(app: FastAPI):
     """
     # Validate configuration before starting
     validate_startup_config()
+
+    # Configure bounded default executor for blocking work
+    import asyncio
+
+    executor = None
+    loop = asyncio.get_running_loop()
+    max_workers = APP_SETTINGS.app.default_executor_workers
+    if max_workers and max_workers > 0:
+        executor = ThreadPoolExecutor(max_workers=max_workers)
+        loop.set_default_executor(executor)
+        logger.info(
+            f"Configured default thread executor with max_workers={sanitize_for_log(max_workers)}"
+        )
+    else:
+        logger.info("Using asyncio default executor (unbounded)")
 
     if APP_SETTINGS.vectordb:
         try:
@@ -69,23 +89,23 @@ async def lifespan(app: FastAPI):
         sys.exit("VectorDB configuration is not set. Exiting application.")
 
     # Start background cleanup task
-    import asyncio
-
     cleanup_task = asyncio.create_task(cleanup_connections())
 
     yield
 
     # Cancel cleanup task on shutdown
     cleanup_task.cancel()
+    if executor:
+        executor.shutdown(wait=False)
 
 
 app = FastAPI(
     title="Flouds Vector API",
     description="Multi-tenant vector database API with Milvus backend",
     version="1.0.0",
-    openapi_url="/api/v1/openapi.json",
-    docs_url="/api/v1/docs",
-    redoc_url="/api/v1/redoc",
+    openapi_url=f"{API_PREFIX}/openapi.json",
+    docs_url=f"{API_PREFIX}/docs",
+    redoc_url=f"{API_PREFIX}/redoc",
     lifespan=lifespan,
 )
 
@@ -97,18 +117,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(AuthMiddleware)
 app.add_middleware(ErrorHandlerMiddleware)
 app.add_middleware(RateLimitMiddleware, calls=100, period=60)
 app.add_middleware(MetricsMiddleware, max_samples=1000, max_endpoints=100)
 app.add_middleware(ValidationMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 
-app.include_router(vector.router, prefix="/api/v1/vector_store", tags=["Vector Store"])
 app.include_router(
-    user.router, prefix="/api/v1/vector_store_users", tags=["User Management"]
+    vector.router, prefix=f"{API_PREFIX}/vector_store", tags=["Vector Store"]
 )
-app.include_router(metrics.router, prefix="/api/v1", tags=["Monitoring"])
-app.include_router(health.router, tags=["Health"])
+app.include_router(
+    user.router, prefix=f"{API_PREFIX}/vector_store_users", tags=["User Management"]
+)
+app.include_router(metrics.router, prefix=API_PREFIX, tags=["Monitoring"])
+app.include_router(health.router, prefix=API_PREFIX, tags=["Health"])
 
 
 @app.get("/")

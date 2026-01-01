@@ -18,7 +18,14 @@ logger = get_logger("tenant_rate_limit")
 
 
 class TenantRateLimiter:
+    """
+    Rate limiter for tenants, supporting different tiers and limits.
+    """
+
     def __init__(self):
+        """
+        Initialize the TenantRateLimiter with default and premium tiers.
+        """
         self.tenant_requests: Dict[str, list] = defaultdict(list)
         self.tenant_limits = {
             "default": {"calls": 200, "period": 60},
@@ -28,7 +35,16 @@ class TenantRateLimiter:
     def check_tenant_limit(
         self, tenant_code: str, tier: str = "default"
     ) -> tuple[bool, dict]:
-        """Check if tenant has exceeded rate limit. Returns (allowed, info)."""
+        """
+        Check if tenant has exceeded rate limit.
+
+        Args:
+            tenant_code (str): The tenant code to check.
+            tier (str, optional): The tenant tier (default or premium).
+
+        Returns:
+            tuple[bool, dict]: (allowed, info) where allowed is True if under limit, info contains details.
+        """
         now = time.time()
         limits = self.tenant_limits.get(tier, self.tenant_limits["default"])
 
@@ -70,8 +86,17 @@ class TenantRateLimiter:
 tenant_limiter = TenantRateLimiter()
 
 
-def check_tenant_rate_limit(tenant_code: str, tier: str = "default"):
-    """Dependency to check tenant rate limits."""
+def check_tenant_rate_limit(tenant_code: str, tier: str = "default") -> None:
+    """
+    Dependency to check tenant rate limits and raise HTTPException if exceeded.
+
+    Args:
+        tenant_code (str): The tenant code to check.
+        tier (str, optional): The tenant tier (default or premium).
+
+    Raises:
+        HTTPException: If the tenant has exceeded the rate limit.
+    """
     allowed, info = tenant_limiter.check_tenant_limit(tenant_code, tier)
     if not allowed:
         raise HTTPException(

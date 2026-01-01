@@ -9,7 +9,13 @@ from pydantic import BaseModel, Field
 
 class BaseResponse(BaseModel):
     """
-    Base response model for API responses from milvus.
+    Base response model for API responses from Milvus.
+
+    Attributes:
+        success (bool): Indicates whether the operation was successful.
+        message (str): A message providing additional information about the operation.
+        tenant_code (str): The tenant for which the operation was performed.
+        time_taken (float): The time taken to complete the operation in seconds.
     """
 
     success: bool = Field(

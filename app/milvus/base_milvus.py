@@ -43,10 +43,10 @@ from app.models.reset_password_request import ResetPasswordRequest
 from app.models.reset_password_response import ResetPasswordResponse
 from app.modules.concurrent_dict import ConcurrentDict
 from app.utils.input_validator import (
-    sanitize_for_log,
     validate_file_path,
     validate_tenant_code,
 )
+from app.utils.log_sanitizer import sanitize_for_log
 
 logger = get_logger("BaseMilvus")
 
@@ -539,10 +539,13 @@ class BaseMilvus:
         Returns True if valid, False otherwise.
         """
         try:
+            # Remove 'Bearer ' prefix if present
+            if token.startswith("Bearer "):
+                token = token[7:].strip()
             alias = str(uuid4())  # Generate a unique alias
-            connections.connect(
-                uri=BaseMilvus._get_milvus_url(), token=token, alias=alias
-            )
+            uri = BaseMilvus._get_milvus_url()
+            # Do not log token for security reasons
+            connections.connect(uri=uri, token=token, alias=alias)
             logger.debug(f"Token validated successfully.")
             connections.disconnect(alias)
             return True
@@ -629,13 +632,13 @@ class BaseMilvus:
     @staticmethod
     def __set_admin_password(new_password: str) -> None:
         """
-        Updates the admin password in multiple storage locations:
-        1. Password file (if configured and writable) as plain text
-        2. Environment variable (as a temporary update)
-        3. BaseMilvus.__milvus_admin_password class variable
+        Update the admin password in all storage locations.
 
         Args:
-            new_password: The new admin password to store
+            new_password (str): The new admin password to store.
+
+        Returns:
+            None
         """
         # Try to write to password file if configured
         password_file = APP_SETTINGS.vectordb.password_file
@@ -672,7 +675,16 @@ class BaseMilvus:
     def _reset_admin_user_password(
         request: ResetPasswordRequest, **kwargs: Any
     ) -> ResetPasswordResponse:
-        """Resets the password for a user in the system."""
+        """
+        Reset the password for a user in the system.
+
+        Args:
+            request (ResetPasswordRequest): The password reset request object.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            ResetPasswordResponse: The response object indicating the result.
+        """
         response = ResetPasswordResponse(
             user_name=request.user_name,
             root_user=False,
@@ -693,7 +705,15 @@ class BaseMilvus:
 
     @staticmethod
     def _validate_password_policy(password: str) -> Optional[str]:
-        """Validate password against policy requirements."""
+        """
+        Validate password against policy requirements.
+
+        Args:
+            password (str): The password to validate.
+
+        Returns:
+            Optional[str]: None if valid, otherwise a string describing the policy violation.
+        """
         requirements = [
             (len(password) >= 8, "at least 8 characters"),
             (bool(re.search(r"[A-Z]", password)), "one uppercase letter"),
@@ -719,7 +739,16 @@ class BaseMilvus:
     def _perform_password_reset(
         request: ResetPasswordRequest, response: ResetPasswordResponse
     ) -> ResetPasswordResponse:
-        """Perform the actual password reset operation."""
+        """
+        Perform the actual password reset operation.
+
+        Args:
+            request (ResetPasswordRequest): The password reset request object.
+            response (ResetPasswordResponse): The response object to update.
+
+        Returns:
+            ResetPasswordResponse: The updated response object.
+        """
         admin_client = BaseMilvus.__get_internal_admin_client()
 
         try:
@@ -761,7 +790,15 @@ class BaseMilvus:
         tenant_client_id: str, tenant_client_secret: str, tenant_database: str
     ) -> MilvusClient:
         """
-        Returns a pooled MilvusClient for the given tenant credentials.
+        Get a pooled MilvusClient for the given tenant credentials.
+
+        Args:
+            tenant_client_id (str): The tenant's client ID.
+            tenant_client_secret (str): The tenant's client secret.
+            tenant_database (str): The tenant's database name.
+
+        Returns:
+            MilvusClient: The pooled client instance.
         """
         logger.debug(
             f"Getting pooled connection for tenant: {sanitize_for_log(tenant_client_id)}, database: {sanitize_for_log(tenant_database)}"
@@ -774,16 +811,22 @@ class BaseMilvus:
         )
 
     @staticmethod
-    def get_chunk_meta_output_fields() -> list:
+    def get_chunk_meta_output_fields() -> list[str]:
         """
-        Returns a list specifying output fields for chunk and meta.
+        Get the output fields for chunk and meta.
+
+        Returns:
+            list[str]: List of output field names.
         """
         return ["chunk", "meta", "model"]
 
     @staticmethod
     def _get_primary_key_name() -> str:
         """
-        Returns the primary key name from settings or the default.
+        Get the primary key name from settings or the default.
+
+        Returns:
+            str: The primary key field name.
         """
         return (
             getattr(APP_SETTINGS.vectordb, "primary_key", None)
@@ -793,7 +836,10 @@ class BaseMilvus:
     @staticmethod
     def _get_vector_field_name() -> str:
         """
-        Returns the vector field name from settings or the default.
+        Get the vector field name from settings or the default.
+
+        Returns:
+            str: The vector field name.
         """
         return (
             getattr(APP_SETTINGS.vectordb, "vector_field_name", None)
@@ -803,16 +849,22 @@ class BaseMilvus:
     @staticmethod
     def _get_primary_key_type() -> str:
         """
-        Returns the primary key type from settings or 'VARCHAR' as default.
+        Get the primary key type from settings or 'VARCHAR' as default.
+
+        Returns:
+            str: The primary key type (e.g., 'VARCHAR', 'INT64').
         """
         return (
             getattr(APP_SETTINGS.vectordb, "primary_key_data_type", None) or "VARCHAR"
         ).upper()
 
     @staticmethod
-    def _get_dtype_map() -> dict:
+    def _get_dtype_map() -> dict[str, Any]:
         """
-        Returns a mapping from string type names to Milvus DataType.
+        Get a mapping from string type names to Milvus DataType.
+
+        Returns:
+            dict[str, Any]: Mapping from type name to DataType.
         """
         return {
             "VARCHAR": DataType.VARCHAR,
@@ -824,9 +876,14 @@ class BaseMilvus:
     @staticmethod
     def _get_vector_store_schema(name: str, dimension: int = 256) -> CollectionSchema:
         """
-        Returns the collection schema for a vector store.
-        Uses custom primary key and type from settings.
-        Uses custom vector field name from settings.
+        Get the collection schema for a vector store.
+
+        Args:
+            name (str): The name of the collection.
+            dimension (int, optional): The vector dimension. Defaults to 256.
+
+        Returns:
+            CollectionSchema: The schema object for the collection.
         """
         primary_key = BaseMilvus._get_primary_key_name()
         primary_key_type = BaseMilvus._get_primary_key_type()
@@ -901,9 +958,15 @@ class BaseMilvus:
         name: str, dimension: int, metadata_length: int = 4096
     ) -> CollectionSchema:
         """
-        Returns a custom collection schema for a vector store with specified parameters.
-        Uses custom primary key and type from settings.
-        Uses custom vector field name from settings.
+        Get a custom collection schema for a vector store with specified parameters.
+
+        Args:
+            name (str): The name of the collection.
+            dimension (int): The vector dimension.
+            metadata_length (int, optional): The max length for metadata. Defaults to 4096.
+
+        Returns:
+            CollectionSchema: The schema object for the collection.
         """
         primary_key = BaseMilvus._get_primary_key_name()
         primary_key_type = BaseMilvus._get_primary_key_type()
@@ -977,7 +1040,23 @@ class BaseMilvus:
         drop_ratio_build: float = 0.1,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Generates a custom schema with specified parameters for a tenant and model."""
+        """
+        Generate a custom schema with specified parameters for a tenant and model.
+
+        Args:
+            tenant_code (str): The tenant code.
+            model_name (str): The model name.
+            dimension (int): The vector dimension.
+            nlist (int, optional): Number of clusters for IVF index. Defaults to 1024.
+            metric_type (str, optional): Metric type for index. Defaults to "COSINE".
+            index_type (str, optional): Index type. Defaults to "IVF_FLAT".
+            metadata_length (int, optional): Metadata max length. Defaults to 4096.
+            drop_ratio_build (float, optional): Drop ratio for sparse index. Defaults to 0.1.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            dict[str, Any]: Summary of schema generation.
+        """
         summary = BaseMilvus._init_schema_summary(
             tenant_code,
             model_name,

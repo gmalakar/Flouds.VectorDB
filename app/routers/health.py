@@ -14,17 +14,23 @@ router = APIRouter()
 
 
 @router.get("/health", response_model=HealthResponse)
-def health_check():
+def health_check() -> HealthResponse:
     """
     Comprehensive health check endpoint with detailed status information.
+
+    Returns:
+        HealthResponse: Health status and details for all components.
     """
     return HealthService.get_health_status()
 
 
 @router.get("/health/ready")
-def readiness_check():
+def readiness_check() -> dict:
     """
     Kubernetes readiness probe endpoint.
+
+    Returns:
+        dict: Readiness status for Kubernetes.
     """
     health = HealthService.get_health_status()
     if health.status == "healthy":
@@ -34,16 +40,22 @@ def readiness_check():
 
 
 @router.get("/health/live")
-def liveness_check():
+def liveness_check() -> dict:
     """
     Kubernetes liveness probe endpoint.
+
+    Returns:
+        dict: Liveness status for Kubernetes.
     """
     return {"status": "alive"}
 
 
 @router.get("/health/connections")
-def connection_pool_stats():
+def connection_pool_stats() -> dict:
     """
     Connection pool statistics endpoint.
+
+    Returns:
+        dict: Connection pool statistics.
     """
     return milvus_pool.get_stats()

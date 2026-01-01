@@ -17,19 +17,19 @@
 
 import os
 import sys
-import urllib.request
 import urllib.error
+import urllib.request
 
 
 def build_healthcheck_url() -> str:
     """
     Build the healthcheck URL from environment variables.
-    
+
     Priority:
     1. HEALTHCHECK_URL (complete override)
     2. Compose from HEALTHCHECK_HOST/PORT/PATH
     3. Fall back to SERVER_HOST/PORT defaults
-    
+
     Returns:
         str: Complete healthcheck URL
     """
@@ -53,7 +53,7 @@ def build_healthcheck_url() -> str:
 def main() -> int:
     """
     Execute healthcheck request.
-    
+
     Returns:
         int: 0 if healthy (2xx/3xx response), 1 otherwise
     """

@@ -16,6 +16,10 @@ logger = get_logger("config_loader")
 
 
 class ConfigLoader:
+    """
+    Loader for application configuration files and environment overrides.
+    """
+
     __appsettings: AppSettings = None
 
     @staticmethod
@@ -24,6 +28,9 @@ class ConfigLoader:
         Loads AppSettings from appsettings.json and environment-specific override in the same folder.
         Performs a deep merge for nested config sections.
         Applies environment variable overrides for key settings.
+
+        Returns:
+            AppSettings: The loaded application settings object.
         """
         data = ConfigLoader._load_config_data("appsettings.json", True)
         ConfigLoader.__appsettings = AppSettings(**data)
@@ -50,6 +57,13 @@ class ConfigLoader:
         """
         Loads a config file and merges with environment-specific override if present.
         Performs a deep merge for nested config sections.
+
+        Args:
+            config_file_name (str): The base config file name.
+            check_env_file (bool, optional): Whether to check for environment-specific override. Defaults to False.
+
+        Returns:
+            Dict[str, Any]: The merged configuration data.
         """
         base_dir = os.path.dirname(os.path.abspath(__file__))
         # Validate config file path to prevent path traversal

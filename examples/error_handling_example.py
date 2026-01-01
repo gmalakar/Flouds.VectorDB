@@ -4,9 +4,9 @@ Example demonstrating error handling for missing database/collection.
 Shows what happens when you try to insert/search without proper setup.
 """
 
-import json
 
-import requests
+# Use shared utilities
+from common import api_post
 
 # Configuration
 BASE_URL = "http://localhost:19680"
@@ -38,17 +38,17 @@ def test_insert_without_setup():
         ],
     }
 
-    print("🧪 Testing insert without database setup...")
-    response = requests.post(INSERT_ENDPOINT, headers=headers, json=payload, timeout=30)
-
-    if response.status_code == 200:
-        result = response.json()
+    logging.info("🧪 Testing insert without database setup...")
+    status_code, result, error_text = api_post(INSERT_ENDPOINT, payload, headers)
+    if status_code == 200 and result:
         if not result.get("success"):
-            print(f"✅ Expected error: {result.get('message')}")
+            logging.info(f"✅ Expected error: {result.get('message')}")
         else:
-            print("❌ Unexpected success - should have failed")
+            logging.error("❌ Unexpected success - should have failed")
+    elif status_code is not None:
+        logging.error(f"❌ HTTP Error: {status_code}")
     else:
-        print(f"❌ HTTP Error: {response.status_code}")
+        logging.error(f"❌ Request failed: {error_text}")
 
 
 def test_search_without_setup():
@@ -60,17 +60,17 @@ def test_search_without_setup():
         "limit": 5,
     }
 
-    print("\n🧪 Testing search without database setup...")
-    response = requests.post(SEARCH_ENDPOINT, headers=headers, json=payload, timeout=30)
-
-    if response.status_code == 200:
-        result = response.json()
+    logging.info("\n🧪 Testing search without database setup...")
+    status_code, result, error_text = api_post(SEARCH_ENDPOINT, payload, headers)
+    if status_code == 200 and result:
         if not result.get("success"):
-            print(f"✅ Expected error: {result.get('message')}")
+            logging.info(f"✅ Expected error: {result.get('message')}")
         else:
-            print("❌ Unexpected success - should have failed")
+            logging.error("❌ Unexpected success - should have failed")
+    elif status_code is not None:
+        logging.error(f"❌ HTTP Error: {status_code}")
     else:
-        print(f"❌ HTTP Error: {response.status_code}")
+        logging.error(f"❌ Request failed: {error_text}")
 
 
 def test_insert_with_db_but_no_collection():
@@ -90,29 +90,29 @@ def test_insert_with_db_but_no_collection():
         ],
     }
 
-    print("\n🧪 Testing insert with database but no collection...")
-    response = requests.post(INSERT_ENDPOINT, headers=headers, json=payload, timeout=30)
-
-    if response.status_code == 200:
-        result = response.json()
+    logging.info("\n🧪 Testing insert with database but no collection...")
+    status_code, result, error_text = api_post(INSERT_ENDPOINT, payload, headers)
+    if status_code == 200 and result:
         if not result.get("success"):
-            print(f"✅ Expected error: {result.get('message')}")
+            logging.info(f"✅ Expected error: {result.get('message')}")
         else:
-            print("❌ Unexpected success - should have failed")
+            logging.error("❌ Unexpected success - should have failed")
+    elif status_code is not None:
+        logging.error(f"❌ HTTP Error: {status_code}")
     else:
-        print(f"❌ HTTP Error: {response.status_code}")
+        logging.error(f"❌ Request failed: {error_text}")
 
 
 def main():
     """Run all error handling tests"""
-    print("🚀 Testing error handling for missing database/collection...\n")
+    logging.info("🚀 Testing error handling for missing database/collection...\n")
 
     test_insert_without_setup()
     test_search_without_setup()
     test_insert_with_db_but_no_collection()
 
-    print("\n✅ Error handling tests completed!")
-    print("The API now properly validates database and collection existence.")
+    logging.info("\n✅ Error handling tests completed!")
+    logging.info("The API now properly validates database and collection existence.")
 
 
 if __name__ == "__main__":

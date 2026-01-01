@@ -16,6 +16,9 @@ from app.models.search_base import SearchEmbeddedBase
 class SearchEmbeddedResponse(BaseResponse, SearchEmbeddedBase):
     """
     Response model for text embedding search.
+
+    Attributes:
+        data (List[EmbeddedMeta]): The list of embedded vectors returned from the search.
     """
 
     data: List[EmbeddedMeta] = Field(

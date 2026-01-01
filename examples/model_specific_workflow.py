@@ -7,9 +7,9 @@ Example workflow showing model-specific collections:
 4. search - Searches in model-specific collection
 """
 
-import json
 
-import requests
+# Use shared utilities
+from common import api_post, print_schema_details
 
 # Configuration
 BASE_URL = "http://localhost:19680"
@@ -30,17 +30,18 @@ headers = {"Content-Type": "application/json", "Authorization": f"Bearer {AUTH_T
 def setup_tenant():
     """Step 1: Setup tenant infrastructure"""
     payload = {"tenant_code": "example_tenant", "vector_dimension": 768}
-
-    print("🔧 Step 1: Setting up tenant infrastructure...")
-    response = requests.post(
-        SET_VECTOR_STORE_ENDPOINT, headers=headers, json=payload, timeout=30
+    logging.info("🔧 Step 1: Setting up tenant infrastructure...")
+    status_code, result, error_text = api_post(
+        SET_VECTOR_STORE_ENDPOINT, payload, headers
     )
-
-    if response.status_code == 200 and response.json().get("success"):
-        print("✅ Tenant setup successful!")
+    if status_code == 200 and result and result.get("success"):
+        logging.info("✅ Tenant setup successful!")
         return True
+    elif status_code is not None:
+        logging.error(f"❌ Tenant setup failed: {error_text or result}")
+        return False
     else:
-        print(f"❌ Tenant setup failed: {response.text}")
+        logging.error(f"❌ Request failed: {error_text}")
         return False
 
 
@@ -55,19 +56,20 @@ def generate_schema_for_model(model_name):
         "model_name": model_name,
         "metadata_length": 8192,
     }
-
-    print(f"🏗️ Step 2: Generating schema for model '{model_name}'...")
-    response = requests.post(
-        GENERATE_SCHEMA_ENDPOINT, headers=headers, json=payload, timeout=30
+    logging.info(f"🏗️ Step 2: Generating schema for model '{model_name}'...")
+    status_code, result, error_text = api_post(
+        GENERATE_SCHEMA_ENDPOINT, payload, headers
     )
-
-    if response.status_code == 200 and response.json().get("success"):
-        result = response.json()
+    if status_code == 200 and result and result.get("success"):
+        print_schema_details(result.get("results", {}))
         collection_name = result.get("results", {}).get("collection_name")
-        print(f"✅ Schema generated! Collection: {collection_name}")
+        logging.info(f"✅ Schema generated! Collection: {collection_name}")
         return True
+    elif status_code is not None:
+        logging.error(f"❌ Schema generation failed: {error_text or result}")
+        return False
     else:
-        print(f"❌ Schema generation failed: {response.text}")
+        logging.error(f"❌ Request failed: {error_text}")
         return False
 
 
@@ -82,26 +84,27 @@ def insert_vectors_for_model(model_name):
                 "chunk": "This is a sample document about machine learning.",
                 "model": model_name,
                 "metadata": {"source": "example", "category": "ml"},
-                "vector": [0.1] * 768,  # Sample 768-dimensional vector
+                "vector": [0.1] * 768,
             },
             {
                 "key": "doc_002",
                 "chunk": "Another document discussing artificial intelligence.",
                 "model": model_name,
                 "metadata": {"source": "example", "category": "ai"},
-                "vector": [0.2] * 768,  # Sample 768-dimensional vector
+                "vector": [0.2] * 768,
             },
         ],
     }
-
-    print(f"📝 Step 3: Inserting vectors for model '{model_name}'...")
-    response = requests.post(INSERT_ENDPOINT, headers=headers, json=payload, timeout=30)
-
-    if response.status_code == 200 and response.json().get("success"):
-        print("✅ Vectors inserted successfully!")
+    logging.info(f"📝 Step 3: Inserting vectors for model '{model_name}'...")
+    status_code, result, error_text = api_post(INSERT_ENDPOINT, payload, headers)
+    if status_code == 200 and result and result.get("success"):
+        logging.info("✅ Vectors inserted successfully!")
         return True
+    elif status_code is not None:
+        logging.error(f"❌ Vector insertion failed: {error_text or result}")
+        return False
     else:
-        print(f"❌ Vector insertion failed: {response.text}")
+        logging.error(f"❌ Request failed: {error_text}")
         return False
 
 
@@ -110,24 +113,24 @@ def search_vectors_for_model(model_name):
     payload = {
         "tenant_code": "example_tenant",
         "model": model_name,
-        "vector": [0.15] * 768,  # Sample query vector
+        "vector": [0.15] * 768,
         "limit": 5,
         "metric_type": "COSINE",
         "score_threshold": 0.0,
     }
-
-    print(f"🔍 Step 4: Searching vectors for model '{model_name}'...")
-    response = requests.post(SEARCH_ENDPOINT, headers=headers, json=payload, timeout=30)
-
-    if response.status_code == 200 and response.json().get("success"):
-        result = response.json()
+    logging.info(f"🔍 Step 4: Searching vectors for model '{model_name}'...")
+    status_code, result, error_text = api_post(SEARCH_ENDPOINT, payload, headers)
+    if status_code == 200 and result and result.get("success"):
         data = result.get("data", [])
-        print(f"✅ Search successful! Found {len(data)} results:")
-        for i, item in enumerate(data[:2]):  # Show first 2 results
-            print(f"   Result {i+1}: {item.get('content', '')[:50]}...")
+        logging.info(f"✅ Search successful! Found {len(data)} results:")
+        for i, item in enumerate(data[:2]):
+            logging.info(f"   Result {i+1}: {item.get('content', '')[:50]}...")
         return True
+    elif status_code is not None:
+        logging.error(f"❌ Search failed: {error_text or result}")
+        return False
     else:
-        print(f"❌ Search failed: {response.text}")
+        logging.error(f"❌ Request failed: {error_text}")
         return False
 
 
@@ -135,7 +138,7 @@ def demonstrate_multiple_models():
     """Demonstrate multiple models for the same tenant"""
     models = ["sentence-transformers-all-MiniLM-L6-v2", "openai-text-embedding-ada-002"]
 
-    print("🚀 Starting multi-model workflow...\n")
+    logging.info("🚀 Starting multi-model workflow...\n")
 
     # Step 1: Setup tenant (once)
     if not setup_tenant():
@@ -143,18 +146,20 @@ def demonstrate_multiple_models():
 
     # Steps 2-4: For each model
     for model in models:
-        print(f"\n📋 Working with model: {model}")
+        logging.info(f"\n📋 Working with model: {model}")
 
         if generate_schema_for_model(model):
             if insert_vectors_for_model(model):
                 search_vectors_for_model(model)
             else:
-                print(f"❌ Skipping search for {model} due to insertion failure")
+                logging.warning(
+                    f"❌ Skipping search for {model} due to insertion failure"
+                )
         else:
-            print(f"❌ Skipping {model} due to schema generation failure")
+            logging.warning(f"❌ Skipping {model} due to schema generation failure")
 
-    print("\n🎉 Multi-model workflow completed!")
-    print("Each model now has its own collection with isolated data.")
+    logging.info("\n🎉 Multi-model workflow completed!")
+    logging.info("Each model now has its own collection with isolated data.")
 
 
 if __name__ == "__main__":

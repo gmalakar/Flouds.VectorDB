@@ -12,7 +12,16 @@ from pydantic import BaseModel, Field
 
 class HealthResponse(BaseModel):
     """
-    Response model for health check endpoint.
+    Response model for the health check endpoint.
+
+    Attributes:
+        status (str): Overall health status: healthy, degraded, or unhealthy.
+        service (str): Service name.
+        version (str): Service version.
+        timestamp (datetime): Health check timestamp.
+        uptime_seconds (float): Service uptime in seconds.
+        components (Dict[str, str]): Status of individual components.
+        details (Optional[Dict[str, dict]]): Additional health check details.
     """
 
     status: str = Field(

@@ -6,19 +6,39 @@
 
 import json
 import time
+import uuid
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.logger import get_logger
-from app.utils.input_validator import sanitize_for_log
+from app.utils.log_sanitizer import sanitize_for_log
 
 logger = get_logger("request_logging")
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+    """
+    Middleware for logging incoming requests and outgoing responses.
+
+    Logs request metadata, sanitized request bodies, and response status/duration.
+    """
+
+    async def dispatch(self, request: Request, call_next) -> object:
+        """
+        Intercept requests and log request/response details.
+
+        Args:
+            request (Request): The incoming HTTP request.
+            call_next (Callable): The next middleware or route handler.
+
+        Returns:
+            Response: The HTTP response.
+        """
         start_time = time.time()
+
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        request.state.request_id = request_id
 
         # Log request
         client_ip = sanitize_for_log(
@@ -28,7 +48,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         url = sanitize_for_log(str(request.url))
         user_agent = sanitize_for_log(request.headers.get("user-agent", ""))
 
-        logger.info(f"Request: {method} {url} from {client_ip} UA: {user_agent}")
+        logger.info(
+            f"Request[{request_id}]: {method} {url} from {client_ip} UA: {user_agent}"
+        )
 
         # Log request body for POST/PUT (sanitized)
         if request.method in ["POST", "PUT", "PATCH"]:
@@ -39,10 +61,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     try:
                         json_body = json.loads(body)
                         sanitized_body = self._sanitize_request_body(json_body)
-                        logger.debug(f"Request body: {json.dumps(sanitized_body)}")
+                        logger.debug(
+                            f"Request[{request_id}] body: {json.dumps(sanitized_body)}"
+                        )
                     except json.JSONDecodeError:
                         logger.debug(
-                            f"Request body (non-JSON): {sanitize_for_log(body.decode()[:500])}"
+                            f"Request[{request_id}] body (non-JSON): {sanitize_for_log(body.decode()[:500])}"
                         )
 
                 # Recreate request with body for downstream processing
@@ -55,16 +79,29 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
 
+        # Attach request id to response for client tracing
+        response.headers["X-Request-ID"] = request_id
+
         # Log response
         duration = time.time() - start_time
         status_code = response.status_code
 
-        logger.info(f"Response: {status_code} for {method} {url} in {duration:.3f}s")
+        logger.info(
+            f"Response[{request_id}]: {status_code} for {method} {url} in {duration:.3f}s"
+        )
 
         return response
 
-    def _sanitize_request_body(self, data):
-        """Sanitize request body by removing sensitive fields and limiting size"""
+    def _sanitize_request_body(self, data) -> object:
+        """
+        Sanitize request body by removing sensitive fields and limiting size.
+
+        Args:
+            data: The request body data (dict, list, or other).
+
+        Returns:
+            object: Sanitized representation of the request body for logging.
+        """
         if isinstance(data, dict):
             sanitized = {}
             for key, value in data.items():

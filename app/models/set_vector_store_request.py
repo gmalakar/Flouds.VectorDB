@@ -9,5 +9,5 @@ from app.models.base_request import BaseRequest
 
 class SetVectorStoreRequest(BaseRequest):
     """
-    Request model for setting up vector store for a tenant.
+    Request model for setting up a vector store for a tenant.
     """

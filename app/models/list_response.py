@@ -13,6 +13,9 @@ from app.models.base_response import BaseResponse
 class ListResponse(BaseResponse):
     """
     Response model for list information.
+
+    Attributes:
+        results (dict): The dictionary containing the list of items.
     """
 
     results: dict = Field(

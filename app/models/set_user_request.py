@@ -12,6 +12,9 @@ from app.models.base_request import BaseRequest
 class SetUserRequest(BaseRequest):
     """
     Request model for setting a user in the vector store.
+
+    Attributes:
+        reset_user (bool): Indicates whether to reset the user.
     """
 
     reset_user: bool = Field(

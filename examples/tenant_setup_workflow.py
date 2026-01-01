@@ -6,8 +6,12 @@ Example workflow showing the new two-step process:
 """
 
 import json
+import logging
 
 import requests
+
+# Configure basic logging for examples
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
 # Configuration
 BASE_URL = "http://localhost:19680"
@@ -32,40 +36,40 @@ def step1_setup_tenant():
         "vector_dimension": 768,  # This is kept for compatibility but not used for collection creation
     }
 
-    print("🔧 Step 1: Setting up tenant infrastructure...")
-    print(f"URL: {SET_VECTOR_STORE_ENDPOINT}")
-    print(f"Payload: {json.dumps(payload, indent=2)}")
+    logging.info("🔧 Step 1: Setting up tenant infrastructure...")
+    logging.info(f"URL: {SET_VECTOR_STORE_ENDPOINT}")
+    logging.info(f"Payload: {json.dumps(payload, indent=2)}")
 
     try:
         response = requests.post(
             SET_VECTOR_STORE_ENDPOINT, headers=headers, json=payload, timeout=30
         )
 
-        print(f"Response Status: {response.status_code}")
+        logging.info(f"Response Status: {response.status_code}")
 
         if response.status_code == 200:
             result = response.json()
-            print("✅ Tenant setup successful!")
+            logging.info("✅ Tenant setup successful!")
 
             if result.get("success"):
                 results = result.get("results", {})
-                print(f"📊 Setup Details:")
-                print(f"   Tenant Code: {results.get('tenant_code')}")
-                print(f"   Database Created: {results.get('db_created')}")
-                print(f"   Role Created: {results.get('role_created')}")
-                print(f"   Role Assigned: {results.get('role_assigned')}")
-                print(f"   Client ID: {results.get('client_id')}")
-                print(f"   New Client: {results.get('new_client_id')}")
+                logging.info(f"📊 Setup Details:")
+                logging.info(f"   Tenant Code: {results.get('tenant_code')}")
+                logging.info(f"   Database Created: {results.get('db_created')}")
+                logging.info(f"   Role Created: {results.get('role_created')}")
+                logging.info(f"   Role Assigned: {results.get('role_assigned')}")
+                logging.info(f"   Client ID: {results.get('client_id')}")
+                logging.info(f"   New Client: {results.get('new_client_id')}")
                 return True
             else:
-                print(f"❌ Tenant setup failed: {result.get('message')}")
+                logging.error(f"❌ Tenant setup failed: {result.get('message')}")
                 return False
         else:
-            print(f"❌ HTTP Error: {response.status_code}")
+            logging.error(f"❌ HTTP Error: {response.status_code}")
             return False
 
-    except Exception as e:
-        print(f"❌ Error: {e}")
+    except Exception:
+        logging.exception("❌ Error while setting up tenant")
         return False
 
 
@@ -83,41 +87,41 @@ def step2_generate_schema():
         "metadata_length": 8192,
     }
 
-    print("\n🏗️ Step 2: Generating custom schema...")
-    print(f"URL: {GENERATE_SCHEMA_ENDPOINT}")
-    print(f"Payload: {json.dumps(payload, indent=2)}")
+    logging.info("\n🏗️ Step 2: Generating custom schema...")
+    logging.info(f"URL: {GENERATE_SCHEMA_ENDPOINT}")
+    logging.info(f"Payload: {json.dumps(payload, indent=2)}")
 
     try:
         response = requests.post(
             GENERATE_SCHEMA_ENDPOINT, headers=headers, json=payload, timeout=30
         )
 
-        print(f"Response Status: {response.status_code}")
+        logging.info(f"Response Status: {response.status_code}")
 
         if response.status_code == 200:
             result = response.json()
-            print("✅ Schema generation successful!")
+            logging.info("✅ Schema generation successful!")
 
             if result.get("success"):
                 results = result.get("results", {})
-                print(f"📊 Schema Details:")
-                print(f"   Collection Name: {results.get('collection_name')}")
-                print(f"   Database Name: {results.get('db_name')}")
-                print(f"   Schema Created: {results.get('schema_created')}")
-                print(f"   Index Created: {results.get('index_created')}")
-                print(f"   Dimension: {results.get('dimension')}")
-                print(f"   Metric Type: {results.get('metric_type')}")
-                print(f"   Index Type: {results.get('index_type')}")
+                logging.info(f"📊 Schema Details:")
+                logging.info(f"   Collection Name: {results.get('collection_name')}")
+                logging.info(f"   Database Name: {results.get('db_name')}")
+                logging.info(f"   Schema Created: {results.get('schema_created')}")
+                logging.info(f"   Index Created: {results.get('index_created')}")
+                logging.info(f"   Dimension: {results.get('dimension')}")
+                logging.info(f"   Metric Type: {results.get('metric_type')}")
+                logging.info(f"   Index Type: {results.get('index_type')}")
                 return True
             else:
-                print(f"❌ Schema generation failed: {result.get('message')}")
+                logging.error(f"❌ Schema generation failed: {result.get('message')}")
                 return False
         else:
-            print(f"❌ HTTP Error: {response.status_code}")
+            logging.error(f"❌ HTTP Error: {response.status_code}")
             return False
 
-    except Exception as e:
-        print(f"❌ Error: {e}")
+    except Exception:
+        logging.exception("❌ Error while generating schema")
         return False
 
 
@@ -125,20 +129,20 @@ def main():
     """
     Complete workflow: Setup tenant then generate schema
     """
-    print("🚀 Starting tenant setup workflow...\n")
+    logging.info("🚀 Starting tenant setup workflow...\n")
 
     # Step 1: Setup tenant infrastructure
     if step1_setup_tenant():
         # Step 2: Generate custom schema
         if step2_generate_schema():
-            print("\n🎉 Complete workflow successful!")
-            print("Your tenant is now ready with custom schema!")
+            logging.info("\n🎉 Complete workflow successful!")
+            logging.info("Your tenant is now ready with custom schema!")
         else:
-            print(
+            logging.error(
                 "\n❌ Schema generation failed. Tenant infrastructure is set up but no collections created."
             )
     else:
-        print("\n❌ Tenant setup failed. Cannot proceed to schema generation.")
+        logging.error("\n❌ Tenant setup failed. Cannot proceed to schema generation.")
 
 
 if __name__ == "__main__":

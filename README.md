@@ -166,7 +166,7 @@ FLOUDS_LOG_PATH=./logs
 
 ## API Endpoints
 
-All endpoints are versioned under `/api/v1/` and require authentication via `Authorization: Bearer user:password` header.
+All endpoints are versioned under `/api/v1/` and require authentication via `Authorization: Bearer user:password` header. Vector store and user management endpoints also require a database credential header: `Flouds-VectorDB-Token: db_user|db_password` (or `db_user:db_password`).
 
 ### Vector Store Operations
 
@@ -205,6 +205,7 @@ curl http://localhost:19680/health
 curl -X POST http://localhost:19680/api/v1/vector_store/set_vector_store \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer admin:admin_password" \
+  -H "Flouds-VectorDB-Token: root|<your_milvus_password>" \
   -d '{
     "tenant_code": "mytenant"
   }'
@@ -216,6 +217,7 @@ curl -X POST http://localhost:19680/api/v1/vector_store/set_vector_store \
 curl -X POST http://localhost:19680/api/v1/vector_store/generate_schema \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer admin:admin_password" \
+  -H "Flouds-VectorDB-Token: root|<your_milvus_password>" \
   -d '{
     "tenant_code": "mytenant",
     "model_name": "sentence-transformers",
@@ -234,6 +236,7 @@ curl -X POST http://localhost:19680/api/v1/vector_store/generate_schema \
 curl -X POST http://localhost:19680/api/v1/vector_store/insert \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer user:password" \
+  -H "Flouds-VectorDB-Token: user|user_password" \
   -d '{
     "tenant_code": "mytenant",
     "data": [
@@ -254,6 +257,7 @@ curl -X POST http://localhost:19680/api/v1/vector_store/insert \
 curl -X POST http://localhost:19680/api/v1/vector_store/search \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer user:password" \
+  -H "Flouds-VectorDB-Token: user|user_password" \
   -d '{
     "tenant_code": "mytenant",
     "model": "sentence-transformers",
@@ -271,6 +275,7 @@ curl -X POST http://localhost:19680/api/v1/vector_store/search \
 curl -X POST http://localhost:19680/api/v1/vector_store/search \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer user:password" \
+  -H "Flouds-VectorDB-Token: user|user_password" \
   -d '{
     "tenant_code": "mytenant",
     "model": "sentence-transformers",
@@ -291,6 +296,7 @@ curl -X POST http://localhost:19680/api/v1/vector_store/search \
 curl -X POST http://localhost:19680/api/v1/vector_store_users/set_user \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer admin:admin_password" \
+  -H "Flouds-VectorDB-Token: root|<your_milvus_password>" \
   -d '{
     "tenant_code": "mytenant"
   }'

@@ -5,13 +5,22 @@
 # =============================================================================
 
 import re
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from app.utils.input_validator import sanitize_for_log
+from app.utils.log_sanitizer import sanitize_for_log
 
 
 def sanitize_error_message(error_msg: str) -> str:
-    """Sanitize error message to prevent sensitive information exposure."""
+    """
+    Sanitize error message to prevent sensitive information exposure.
+
+    Args:
+        error_msg (str): The error message to sanitize.
+
+    Returns:
+        str: Sanitized error message with sensitive data redacted.
+    """
     sensitive_patterns = [
         r'password[=:\s]*[^\s\'"]+',
         r'token[=:\s]*[^\s\'"]+',
@@ -37,16 +46,42 @@ def format_error_response(
     message: str,
     details: Optional[str] = None,
     status_code: int = 500,
+    request_id: Optional[str] = None,
+    path: Optional[str] = None,
+    method: Optional[str] = None,
     retry_after: Optional[int] = None,
     additional_info: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Format consistent error response structure."""
+    """
+    Format a consistent error response structure for API responses.
+
+    Args:
+        error_type (str): The type of error.
+        message (str): The error message.
+        details (Optional[str], optional): Additional error details. Defaults to None.
+        status_code (int, optional): HTTP status code. Defaults to 500.
+        retry_after (Optional[int], optional): Retry-After value for rate limits. Defaults to None.
+        additional_info (Optional[Dict[str, Any]], optional): Additional info to include. Defaults to None.
+
+    Returns:
+        Dict[str, Any]: Formatted error response dictionary.
+    """
     response = {
         "error": error_type,
         "message": message,
         "type": error_type.lower().replace(" ", "_"),
-        "timestamp": None,  # Will be added by middleware if needed
+        "status_code": status_code,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+    if path:
+        response["path"] = path
+
+    if method:
+        response["method"] = method
+
+    if request_id:
+        response["request_id"] = request_id
 
     if details:
         response["details"] = sanitize_error_message(details)
@@ -67,7 +102,19 @@ def format_rate_limit_response(
     limit_type: str = "general",
     tier: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Format rate limit error response."""
+    """
+    Format a rate limit error response for API clients.
+
+    Args:
+        limit (int): The request limit.
+        period (int): The period in seconds for the limit.
+        retry_after (int): Time in seconds to wait before retrying.
+        limit_type (str, optional): The type of rate limit. Defaults to "general".
+        tier (Optional[str], optional): The user tier, if applicable. Defaults to None.
+
+    Returns:
+        Dict[str, Any]: Formatted rate limit error response.
+    """
     response = {
         "error": "Rate Limit Exceeded",
         "message": f"Too many requests. Limit: {limit} requests per {period} seconds",

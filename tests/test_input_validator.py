@@ -7,13 +7,18 @@
 import pytest
 
 from app.utils.input_validator import (
-    sanitize_for_log,
+    sanitize_text_input,
     validate_file_path,
+    validate_limit,
     validate_model_name,
+    validate_offset,
+    validate_score_threshold,
     validate_tenant_code,
+    validate_user_id,
     validate_vector,
     validate_vector_dimension,
 )
+from app.utils.log_sanitizer import sanitize_for_log
 
 
 class TestInputValidator:
@@ -67,8 +72,8 @@ class TestInputValidator:
 
     def test_sanitize_for_log(self):
         assert sanitize_for_log("normal text") == "normal text"
-        assert sanitize_for_log("text\nwith\nnewlines") == "textwithnewlines"
-        assert sanitize_for_log("a" * 300) == "a" * 200 + "..."
+        assert sanitize_for_log("text\nwith\nnewlines") == "text_with_newlines"
+        assert sanitize_for_log("a" * 300) == "a" * 197 + "..."
         assert sanitize_for_log(None) == "None"
 
     def test_validate_file_path_valid(self):

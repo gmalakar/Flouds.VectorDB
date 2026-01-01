@@ -23,8 +23,9 @@ class InsertEmbeddedRequest(BaseRequest):
     """
     Request model for inserting embedded vectors into the vector store.
 
-    Contains the model name and list of embedded vectors with metadata
-    to be stored in the tenant's vector database.
+    Attributes:
+        model_name (str): The model name for the vectors.
+        data (List[EmbeddedVector]): The vectors to be stored in the vector store.
     """
 
     model_name: str = Field(
@@ -39,12 +40,33 @@ class InsertEmbeddedRequest(BaseRequest):
 
     @field_validator("model_name")
     @classmethod
-    def validate_model_name_field(cls, v):
+    def validate_model_name_field(cls, v: str) -> str:
+        """
+        Validate the model_name field using the custom model name validator.
+
+        Args:
+            v (str): The model name to validate.
+
+        Returns:
+            str: The validated model name.
+        """
         return validate_model_name(v)
 
     @field_validator("data")
     @classmethod
-    def validate_data_field(cls, v):
+    def validate_data_field(cls, v: list) -> list:
+        """
+        Validate the data field to ensure it is a non-empty list of valid vectors.
+
+        Args:
+            v (list): The list of EmbeddedVector objects to validate.
+
+        Returns:
+            list: The validated list of EmbeddedVector objects.
+
+        Raises:
+            ValueError: If the list is empty, too large, or contains invalid vectors.
+        """
         if not v or len(v) == 0:
             raise ValueError("Data list cannot be empty")
         if len(v) > 1000:
@@ -68,6 +90,15 @@ class InsertEmbeddedRequest(BaseRequest):
 
     @model_validator(mode="after")
     def check_unique_keys(self):
+        """
+        Validate that all primary keys in the data are unique and non-empty.
+
+        Returns:
+            InsertEmbeddedRequest: The validated request object.
+
+        Raises:
+            ValueError: If duplicate or empty primary keys are found.
+        """
         keys = [v.key for v in self.data]
         if len(keys) != len(set(keys)):
             raise ValueError("Duplicate primary key values found in the data.")

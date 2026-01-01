@@ -7,8 +7,12 @@ to create a custom schema with specific parameters.
 """
 
 import json
+import logging
 
 import requests
+
+# Configure basic logging for examples
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
 # Configuration
 BASE_URL = "http://localhost:19680"
@@ -39,50 +43,50 @@ def generate_schema():
     Call the GenerateSchema API endpoint.
     """
     try:
-        print("Calling GenerateSchema API...")
-        print(f"URL: {API_ENDPOINT}")
-        print(f"Payload: {json.dumps(payload, indent=2)}")
+        logging.info("Calling GenerateSchema API...")
+        logging.info(f"URL: {API_ENDPOINT}")
+        logging.info(f"Payload: {json.dumps(payload, indent=2)}")
 
         response = requests.post(
             API_ENDPOINT, headers=headers, json=payload, timeout=30
         )
 
-        print(f"\nResponse Status: {response.status_code}")
+        logging.info(f"\nResponse Status: {response.status_code}")
 
         if response.status_code == 200:
             result = response.json()
-            print("✅ Schema generation successful!")
-            print(f"Response: {json.dumps(result, indent=2)}")
+            logging.info("✅ Schema generation successful!")
+            logging.debug(f"Response: {json.dumps(result, indent=2)}")
 
             # Extract key information
             if result.get("success"):
                 results = result.get("results", {})
-                print(f"\n📊 Schema Details:")
-                print(f"   Tenant Code: {results.get('tenant_code')}")
-                print(f"   Model Name: {results.get('model_name')}")
-                print(f"   Collection Name: {results.get('collection_name')}")
-                print(f"   Database Name: {results.get('db_name')}")
-                print(f"   Dimension: {results.get('dimension')}")
-                print(f"   Metric Type: {results.get('metric_type')}")
-                print(f"   Index Type: {results.get('index_type')}")
-                print(f"   NList: {results.get('nlist')}")
-                print(f"   Metadata Length: {results.get('metadata_length')}")
-                print(f"   Schema Created: {results.get('schema_created')}")
-                print(f"   Index Created: {results.get('index_created')}")
+                logging.info("\n📊 Schema Details:")
+                logging.info(f"   Tenant Code: {results.get('tenant_code')}")
+                logging.info(f"   Model Name: {results.get('model_name')}")
+                logging.info(f"   Collection Name: {results.get('collection_name')}")
+                logging.info(f"   Database Name: {results.get('db_name')}")
+                logging.info(f"   Dimension: {results.get('dimension')}")
+                logging.info(f"   Metric Type: {results.get('metric_type')}")
+                logging.info(f"   Index Type: {results.get('index_type')}")
+                logging.info(f"   NList: {results.get('nlist')}")
+                logging.info(f"   Metadata Length: {results.get('metadata_length')}")
+                logging.info(f"   Schema Created: {results.get('schema_created')}")
+                logging.info(f"   Index Created: {results.get('index_created')}")
             else:
-                print(f"❌ Schema generation failed: {result.get('message')}")
+                logging.error(f"❌ Schema generation failed: {result.get('message')}")
         else:
-            print(f"❌ HTTP Error: {response.status_code}")
+            logging.error(f"❌ HTTP Error: {response.status_code}")
             try:
                 error_detail = response.json()
-                print(f"Error Details: {json.dumps(error_detail, indent=2)}")
-            except:
-                print(f"Error Text: {response.text}")
+                logging.error(f"Error Details: {json.dumps(error_detail, indent=2)}")
+            except Exception as e:
+                logging.error(f"Error Text: {response.text}", exc_info=True)
 
     except requests.exceptions.RequestException as e:
-        print(f"❌ Request failed: {e}")
-    except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        logging.error(f"❌ Request failed: {e}")
+    except Exception:
+        logging.exception("❌ Unexpected error while generating schema")
 
 
 if __name__ == "__main__":

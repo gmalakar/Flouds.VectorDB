@@ -13,20 +13,44 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.logger import get_logger
 from app.utils.error_formatter import format_rate_limit_response
-from app.utils.input_validator import sanitize_for_log
+from app.utils.log_sanitizer import sanitize_for_log
 
 logger = get_logger("rate_limit")
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware for rate limiting requests by tenant or IP address.
+
+    Tracks request counts and enforces limits per period.
+    """
+
     def __init__(self, app, calls: int = 100, period: int = 60):
+        """
+        Initialize the RateLimitMiddleware.
+
+        Args:
+            app: The FastAPI application instance.
+            calls (int, optional): Maximum allowed calls per period. Defaults to 100.
+            period (int, optional): Time window in seconds for rate limiting. Defaults to 60.
+        """
         super().__init__(app)
         self.calls = calls
         self.period = period
         self.clients = defaultdict(list)
         self.tenants = defaultdict(list)
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next) -> object:
+        """
+        Intercept requests and enforce rate limits by tenant or IP.
+
+        Args:
+            request (Request): The incoming HTTP request.
+            call_next (Callable): The next middleware or route handler.
+
+        Returns:
+            Response: The HTTP response, or raises HTTPException if rate limit exceeded.
+        """
         now = time.time()
 
         # Get tenant from request body for API endpoints
@@ -67,7 +91,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return response
 
     async def _extract_tenant_code(self, request: Request) -> str:
-        """Extract tenant_code from request body."""
+        """
+        Extract tenant_code from request body if present.
+
+        Args:
+            request (Request): The incoming HTTP request.
+
+        Returns:
+            str: The tenant code if found, else None.
+        """
         if request.method in ["POST", "PUT", "PATCH"] and request.url.path.startswith(
             "/api/v1/"
         ):

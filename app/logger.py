@@ -9,6 +9,8 @@
 
 import logging
 import os
+import sys
+import traceback
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
@@ -92,10 +94,19 @@ def _get_or_create_logger(logger_name: str) -> logging.Logger:
         fh.setFormatter(formatter)
         logger.addHandler(fh)
     except (OSError, PermissionError, FileNotFoundError) as e:
-        print(f"Warning: Failed to create log file handler: {e}")
+        # If logger setup fails we cannot rely on logger; fall back to stderr prints
+        print(f"Warning: Failed to create log file handler: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
     except (ValueError, TypeError, AttributeError) as e:
-        print(f"Warning: Configuration error creating log file handler: {e}")
+        print(
+            f"Warning: Configuration error creating log file handler: {e}",
+            file=sys.stderr,
+        )
+        traceback.print_exc(file=sys.stderr)
     except Exception as e:
-        print(f"Warning: Unexpected error creating log file handler: {e}")
+        print(
+            f"Warning: Unexpected error creating log file handler: {e}", file=sys.stderr
+        )
+        traceback.print_exc(file=sys.stderr)
 
     return logger

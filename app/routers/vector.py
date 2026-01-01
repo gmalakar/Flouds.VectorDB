@@ -6,9 +6,9 @@
 
 import asyncio
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
-from app.dependencies.auth import get_token
+from app.dependencies.auth import get_db_token
 from app.logger import get_logger
 from app.middleware.tenant_rate_limit import check_tenant_rate_limit
 from app.models.base_response import BaseResponse
@@ -26,9 +26,13 @@ router: APIRouter = APIRouter()
 logger = get_logger("router")
 
 
-def log_response(response, operation: str):
+def log_response(response, operation: str) -> None:
     """
     Logs the response for a given operation with sanitization.
+
+    Args:
+        response: The response object to log.
+        operation (str): The operation name.
     """
     tenant_code = sanitize_for_log(response.tenant_code)
     success = response.success
@@ -53,14 +57,17 @@ def log_response(response, operation: str):
 @router.post("/set_vector_store", response_model=ListResponse)
 async def set_vector_store(
     request: SetVectorStoreRequest,
-    token: str = Depends(get_token),
+    http_request: Request,
+    db_secret: str = Depends(get_db_token),
 ) -> ListResponse:
     """
     Sets up database, user, and permissions for the given tenant.
     Does NOT create collections or indexes - use generate_schema for that.
+    Requires `Flouds-VectorDB-Token` header for database credentials.
 
     Args:
         request (SetVectorStoreRequest): The request object with tenant, token, and vector dimension.
+        http_request (Request): FastAPI request to access authenticated client info.
 
     Returns:
         ListResponse: The response with tenant setup details.
@@ -69,9 +76,10 @@ async def set_vector_store(
         f"set_vector_store request for tenant: {sanitize_for_log(request.tenant_code)}"
     )
     check_tenant_rate_limit(request.tenant_code)
+
     extra_fields = CommonUtils.parse_extra_fields(request, SetVectorStoreRequest)
     response: ListResponse = await asyncio.to_thread(
-        VectorStoreService.set_vector_store, request, token=token, **extra_fields
+        VectorStoreService.set_vector_store, request, token=db_secret, **extra_fields
     )
     log_response(response, "set_vector_store")
     return response
@@ -80,7 +88,8 @@ async def set_vector_store(
 @router.post("/insert", response_model=BaseResponse)
 async def insert(
     request: InsertEmbeddedRequest,
-    token: str = Depends(get_token),
+    http_request: Request,
+    db_secret: str = Depends(get_db_token),
 ) -> BaseResponse:
     """
     Inserts embedded vectors into the model-specific collection for the given tenant.
@@ -88,6 +97,8 @@ async def insert(
 
     Args:
         request (InsertEmbeddedRequest): The request object with tenant, token, and data.
+        http_request (Request): FastAPI request to access authenticated client info.
+        Requires `Flouds-VectorDB-Token` header for database credentials.
 
     Returns:
         BaseResponse: The response with insertion details.
@@ -96,11 +107,12 @@ async def insert(
         f"insert request for tenant: {sanitize_for_log(request.tenant_code)}, vectors: {len(request.data)}"
     )
     check_tenant_rate_limit(request.tenant_code)
+
     extra_fields = CommonUtils.parse_extra_fields(request, InsertEmbeddedRequest)
     response: BaseResponse = await asyncio.to_thread(
         VectorStoreService.insert_into_vector_store,
         request,
-        token=token,
+        token=db_secret,
         **extra_fields,
     )
     log_response(response, "insert")
@@ -110,7 +122,8 @@ async def insert(
 @router.post("/search", response_model=SearchEmbeddedResponse)
 async def search(
     request: SearchEmbeddedRequest,
-    token: str = Depends(get_token),
+    http_request: Request,
+    db_secret: str = Depends(get_db_token),
 ) -> SearchEmbeddedResponse:
     """
     Searches for embedded vectors in the model-specific collection for the given tenant.
@@ -118,6 +131,8 @@ async def search(
 
     Args:
         request (SearchEmbeddedRequest): The request object with tenant, token, model, and search parameters.
+        http_request (Request): FastAPI request to access authenticated client info.
+        Requires `Flouds-VectorDB-Token` header for database credentials.
 
     Returns:
         SearchEmbeddedResponse: The response with search details.
@@ -126,11 +141,12 @@ async def search(
         f"search request for tenant: {sanitize_for_log(request.tenant_code)}, limit: {request.limit}"
     )
     check_tenant_rate_limit(request.tenant_code)
+
     extra_fields = CommonUtils.parse_extra_fields(request, SearchEmbeddedRequest)
     response: SearchEmbeddedResponse = await asyncio.to_thread(
         VectorStoreService.search_in_vector_store,
         request,
-        token=token,
+        token=db_secret,
         **extra_fields,
     )
     log_response(response, "search")
@@ -140,13 +156,16 @@ async def search(
 @router.post("/generate_schema", response_model=ListResponse)
 async def generate_schema(
     request: GenerateSchemaRequest,
-    token: str = Depends(get_token),
+    http_request: Request,
+    db_secret: str = Depends(get_db_token),
 ) -> ListResponse:
     """
     Generates a custom schema for the given tenant with specified parameters.
 
     Args:
         request (GenerateSchemaRequest): The request object with tenant, model, and schema parameters.
+        http_request (Request): FastAPI request to access authenticated client info.
+        Requires `Flouds-VectorDB-Token` header for database credentials.
 
     Returns:
         ListResponse: The response with schema generation details.
@@ -155,9 +174,10 @@ async def generate_schema(
         f"generate_schema request for tenant: {sanitize_for_log(request.tenant_code)}, model: {sanitize_for_log(request.model_name)}, dimension: {request.dimension}"
     )
     check_tenant_rate_limit(request.tenant_code)
+
     extra_fields = CommonUtils.parse_extra_fields(request, GenerateSchemaRequest)
     response: ListResponse = await asyncio.to_thread(
-        VectorStoreService.generate_schema, request, token=token, **extra_fields
+        VectorStoreService.generate_schema, request, token=db_secret, **extra_fields
     )
     log_response(response, "generate_schema")
     return response
@@ -167,21 +187,24 @@ async def generate_schema(
 async def flush_collection(
     tenant_code: str,
     model_name: str,
-    token: str = Depends(get_token),
+    http_request: Request,
+    db_secret: str = Depends(get_db_token),
 ) -> BaseResponse:
     """
     Manually flush a tenant's collection for immediate data persistence.
     Useful after batch operations with deferred flushing.
+        Requires `Flouds-VectorDB-Token` header for database credentials.
     """
     logger.debug(
         f"flush request for tenant: {sanitize_for_log(tenant_code)}, model: {sanitize_for_log(model_name)}"
     )
     check_tenant_rate_limit(tenant_code)
+
     response: BaseResponse = await asyncio.to_thread(
         VectorStoreService.flush_vector_store,
         tenant_code=tenant_code,
         model_name=model_name,
-        token=token,
+        token=db_secret,
     )
     log_response(response, "flush")
     return response

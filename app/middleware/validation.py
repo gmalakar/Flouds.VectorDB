@@ -8,13 +8,29 @@ from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.logger import get_logger
-from app.utils.input_validator import sanitize_for_log
+from app.utils.log_sanitizer import sanitize_for_log
 
 logger = get_logger("validation_middleware")
 
 
 class ValidationMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+    """
+    Middleware for validating request size and content type.
+
+    Enforces maximum request size and ensures JSON content type for POST/PUT/PATCH.
+    """
+
+    async def dispatch(self, request: Request, call_next) -> object:
+        """
+        Intercept requests to validate size and content type.
+
+        Args:
+            request (Request): The incoming HTTP request.
+            call_next (Callable): The next middleware or route handler.
+
+        Returns:
+            Response: The HTTP response, or raises HTTPException if validation fails.
+        """
         # Validate request size
         if hasattr(request, "headers") and "content-length" in request.headers:
             content_length = int(request.headers.get("content-length", 0))

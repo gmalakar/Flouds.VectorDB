@@ -10,23 +10,20 @@ from typing import Any
 
 def sanitize_for_log(value: Any) -> str:
     """
-    Sanitize input for safe logging by removing/encoding dangerous characters.
+    Sanitize input for safe logging by removing or encoding dangerous characters.
 
     Args:
-        value: Input value to sanitize
+        value (Any): Input value to sanitize for logging.
 
     Returns:
-        str: Sanitized string safe for logging
+        str: Sanitized string safe for logging.
     """
     if value is None:
         return "None"
 
-    # Convert to string
-    str_value = str(value)
-
-    # Remove or replace dangerous characters
+    str_value: str = str(value)
     # Remove newlines, carriage returns, and other control characters
-    sanitized = re.sub(r"[\r\n\t\x00-\x1f\x7f-\x9f]", "_", str_value)
+    sanitized: str = re.sub(r"[\r\n\t\x00-\x1f\x7f-\x9f]", "_", str_value)
 
     # Limit length to prevent log flooding
     if len(sanitized) > 200:
@@ -35,14 +32,14 @@ def sanitize_for_log(value: Any) -> str:
     return sanitized
 
 
-def sanitize_dict_for_log(data: dict) -> dict:
+def sanitize_dict_for_log(data: dict[str, Any]) -> dict[str, str]:
     """
-    Sanitize dictionary values for logging.
+    Sanitize all values in a dictionary for safe logging.
 
     Args:
-        data: Dictionary to sanitize
+        data (dict[str, Any]): Dictionary to sanitize.
 
     Returns:
-        dict: Dictionary with sanitized values
+        dict[str, str]: Dictionary with sanitized string values.
     """
     return {k: sanitize_for_log(v) for k, v in data.items()}

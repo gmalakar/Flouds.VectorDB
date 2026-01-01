@@ -7,6 +7,8 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 
+from typing import Dict, Optional
+
 from pydantic import Field, field_validator
 
 from app.models.base_request import BaseRequest
@@ -24,6 +26,23 @@ class SearchEmbeddedRequest(BaseRequest, SearchEmbeddedBase):
 
     Inherits from BaseRequest for tenant information and SearchEmbeddedBase
     for common search parameters. Supports both dense and hybrid search modes.
+
+    Attributes:
+        model (str): The name of the model to be used for searching.
+        limit (int): Maximum number of search results to return.
+        offset (int): Number of results to skip for pagination.
+        nprobe (int): The number of probes to use for the search.
+        round_decimal (int): Decimal places for score rounding.
+        consistency_level (str): The consistency level for the search.
+        output_fields (list[str]): The fields to be included in the search results.
+        score_threshold (float): Minimum similarity score threshold for results.
+        meta_required (bool): Whether to include metadata in the search results.
+        metric_type (str): Distance metric for similarity calculation.
+        text_filter (str): Optional text filter for keyword-based filtering within chunk content.
+        minimum_words_match (int): Minimum number of words that must match in text filter.
+        include_stop_words (bool): Whether to include stop words in the matching process.
+        increase_limit_for_text_search (int): Additional results to fetch for text filtering before applying limit.
+        vector (list[float]): The vector to be searched in the vector store.
     """
 
     model: str = Field(
@@ -81,6 +100,11 @@ class SearchEmbeddedRequest(BaseRequest, SearchEmbeddedBase):
         description="Whether to include metadata in the search results. Default is False.",
     )
 
+    meta_filter: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="Optional metadata filters (key/value substring match, case-insensitive).",
+    )
+
     metric_type: str = Field(
         "COSINE",
         description="Distance metric for similarity calculation. Options: 'L2', 'IP', 'COSINE'. Default: 'COSINE'.",
@@ -117,24 +141,85 @@ class SearchEmbeddedRequest(BaseRequest, SearchEmbeddedBase):
 
     @field_validator("model")
     @classmethod
-    def validate_model_field(cls, v):
+    def validate_model_field(cls, v: str) -> str:
+        """
+        Validate the model field using the custom model name validator.
+
+        Args:
+            v (str): The model name to validate.
+
+        Returns:
+            str: The validated model name.
+        """
         return validate_model_name(v)
 
     @field_validator("text_filter")
     @classmethod
-    def validate_text_filter_field(cls, v):
+    def validate_text_filter_field(cls, v: str) -> str:
+        """
+        Validate the text_filter field to ensure it is sanitized and within length limits.
+
+        Args:
+            v (str): The text filter value to validate.
+
+        Returns:
+            str: The sanitized text filter.
+        """
         if v is not None:
             return sanitize_text_input(v, max_length=500)
         return v
 
+    @field_validator("meta_filter")
+    @classmethod
+    def validate_meta_filter(
+        cls, v: Optional[Dict[str, str]]
+    ) -> Optional[Dict[str, str]]:
+        """Ensure meta_filter is small and string-coercible."""
+        if v is None:
+            return v
+        if not isinstance(v, dict):
+            raise ValueError("meta_filter must be a dictionary")
+        if len(v) > 10:
+            raise ValueError("meta_filter supports up to 10 keys")
+        cleaned = {}
+        for key, val in v.items():
+            if not isinstance(key, str) or not key.strip():
+                raise ValueError("meta_filter keys must be non-empty strings")
+            sval = str(val)
+            if len(sval) > 200:
+                raise ValueError("meta_filter values must be <=200 characters")
+            cleaned[key.strip()] = sval
+        return cleaned
+
     @field_validator("vector")
     @classmethod
-    def validate_vector_field(cls, v):
+    def validate_vector_field(cls, v: list) -> list:
+        """
+        Validate the vector field using the custom vector validator.
+
+        Args:
+            v (list): The vector to validate.
+
+        Returns:
+            list: The validated vector.
+        """
         return validate_vector(v)
 
     @field_validator("metric_type")
     @classmethod
-    def validate_metric_type_field(cls, v):
+    def validate_metric_type_field(cls, v: str) -> str:
+        """
+        Validate the metric_type field to ensure it is one of the allowed values.
+
+        Args:
+            v (str): The metric type to validate.
+
+        Returns:
+            str: The validated metric type.
+
+        Raises:
+            ValueError: If the metric type is not allowed.
+        """
         allowed_metrics = ["L2", "IP", "COSINE"]
         if v not in allowed_metrics:
             raise ValueError(f"Metric type must be one of: {allowed_metrics}")
@@ -142,7 +227,19 @@ class SearchEmbeddedRequest(BaseRequest, SearchEmbeddedBase):
 
     @field_validator("consistency_level")
     @classmethod
-    def validate_consistency_level_field(cls, v):
+    def validate_consistency_level_field(cls, v: str) -> str:
+        """
+        Validate the consistency_level field to ensure it is one of the allowed values.
+
+        Args:
+            v (str): The consistency level to validate.
+
+        Returns:
+            str: The validated consistency level.
+
+        Raises:
+            ValueError: If the consistency level is not allowed.
+        """
         allowed_levels = ["Strong", "Session", "Bounded", "Eventually"]
         if v not in allowed_levels:
             raise ValueError(f"Consistency level must be one of: {allowed_levels}")

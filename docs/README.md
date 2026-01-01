@@ -46,6 +46,10 @@ All endpoints require Bearer token authentication:
 ```
 Authorization: Bearer user:password
 ```
+Vector store and user management endpoints also require a database credential header:
+```
+Flouds-VectorDB-Token: db_user|db_password
+```
 
 ### API Versioning
 All endpoints are versioned under `/api/v1/` for backward compatibility.

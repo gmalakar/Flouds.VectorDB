@@ -13,6 +13,11 @@ logger = get_logger("metrics_router")
 
 
 @router.get("/metrics")
-def get_metrics():
-    """Get basic system metrics"""
+def get_metrics() -> dict:
+    """
+    Get basic system metrics.
+
+    Returns:
+        dict: Basic health and version info.
+    """
     return {"status": "healthy", "service": "FloudsVector.Py", "version": "1.0.0"}
