@@ -1,5 +1,0 @@
-=== ADMIN CREDENTIALS CREATED ===
-Admin Client ID: admin
-Admin Secret: IkIysB7KJu96oWODcxO_jGfdS_U1BfhlRAF75bartyY
-Admin Token: admin|IkIysB7KJu96oWODcxO_jGfdS_U1BfhlRAF75bartyY
-=== SAVE THESE CREDENTIALS ===
