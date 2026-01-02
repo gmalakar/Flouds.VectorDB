@@ -252,6 +252,27 @@ class BaseMilvus:
             logger.error(f"Failed to connect to Milvus: {ex}")
             raise MilvusConnectionError(f"Failed to connect to Milvus: {ex}")
         except Exception as ex:
+            # Provide extra diagnostic help for authentication failures without revealing secrets
+            msg = str(ex)
+            if "UNAUTHENTICATED" in msg or "auth check failure" in msg.lower():
+                # Determine where password likely came from
+                pw_source = "config"
+                if os.getenv("VECTORDB_PASSWORD"):
+                    pw_source = "environment variable VECTORDB_PASSWORD"
+                elif os.getenv("VECTORDB_PASSWORD_FILE") or getattr(
+                    APP_SETTINGS.vectordb, "password_file", None
+                ):
+                    pw_source = "password file (VECTORDB_PASSWORD_FILE or config)"
+
+                logger.error(
+                    "Milvus reported authentication failure (UNAUTHENTICATED). "
+                    "Check Milvus username and password. The application provided the username '%s' and obtained the password from %s."
+                    % (sanitize_for_log(cls.__milvus_admin_username), pw_source)
+                )
+                raise MilvusConnectionError(
+                    "Milvus authentication failed (UNAUTHENTICATED). Verify VECTORDB_USERNAME and VECTORDB_PASSWORD or VECTORDB_PASSWORD_FILE."
+                )
+
             logger.error(f"Unexpected error connecting to Milvus: {ex}")
             raise MilvusConnectionError(f"Failed to connect to Milvus: {ex}")
 

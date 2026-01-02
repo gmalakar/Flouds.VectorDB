@@ -27,7 +27,7 @@ from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_logging import RequestLoggingMiddleware
 from app.middleware.validation import ValidationMiddleware
 from app.milvus.milvus_helper import MilvusHelper
-from app.routers import health, metrics, user, vector
+from app.routers import admin, health, metrics, user, vector
 from app.tasks.cleanup import cleanup_connections
 from app.utils.log_sanitizer import sanitize_for_log
 
@@ -132,6 +132,7 @@ app.include_router(
 )
 app.include_router(metrics.router, prefix=API_PREFIX, tags=["Monitoring"])
 app.include_router(health.router, prefix=API_PREFIX, tags=["Health"])
+app.include_router(admin.router, prefix=f"{API_PREFIX}/admin", tags=["Admin"])
 
 
 @app.get("/")

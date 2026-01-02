@@ -47,6 +47,24 @@ class ConfigLoader:
 
         ConfigLoader.__appsettings.app.debug = os.getenv("APP_DEBUG_MODE", "0") == "1"
 
+        # Security settings
+        ConfigLoader.__appsettings.security.enabled = (
+            os.getenv(
+                "FLOUDS_SECURITY_ENABLED",
+                str(ConfigLoader.__appsettings.security.enabled),
+            ).lower()
+            == "true"
+        )
+
+        # Clients database path
+        ConfigLoader.__appsettings.security.enabled = (
+            os.getenv(
+                "FLOUDS_CLIENTS_DB",
+                str(ConfigLoader.__appsettings.security.enabled),
+            ).lower()
+            == "true"
+        )
+
         logger.info(f"Loaded app settings for environment: {env}")
         return ConfigLoader.__appsettings
 

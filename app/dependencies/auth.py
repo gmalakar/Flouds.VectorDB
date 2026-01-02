@@ -43,6 +43,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
         self.enabled = APP_SETTINGS.security.enabled
 
         # Cache valid keys count at startup to avoid repeated calls
+        # Ensure key_manager has latest clients loaded into memory
+        try:
+            key_manager.load_clients()
+        except Exception:
+            logger.exception(
+                "Failed to load clients during auth middleware initialization"
+            )
+
         self._keys_configured = (
             bool(key_manager.get_all_tokens()) if self.enabled else True
         )
@@ -125,8 +133,21 @@ class AuthMiddleware(BaseHTTPMiddleware):
             client = key_manager.authenticate_client(token)
 
         if not client:
+            # Avoid logging raw tokens or secrets. Log only masked client id.
+            try:
+                if token and ("|" in token or ":" in token):
+                    cid = (
+                        token.split("|", 1)[0]
+                        if "|" in token
+                        else token.split(":", 1)[0]
+                    )
+                    masked = f"{cid}|***"
+                else:
+                    masked = "***"
+            except Exception:
+                masked = "***"
             logger.warning(
-                f"Authentication failed for API token: {sanitize_for_log(token)}"
+                "Authentication failed for API token: %s", sanitize_for_log(masked)
             )
             error_response = BaseResponse(
                 success=False, message="Invalid API token", model="auth"

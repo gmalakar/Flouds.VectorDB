@@ -60,7 +60,7 @@ class VectorDBConfig(BaseModel):
     port: int = Field(default=19530)
     username: str = Field(default="root")
     password: str = Field(default="")
-    password_file: str = Field(default="/app/secrets/password.txt")
+    password_file: str = Field(default="/app/data/secrets/vectordb_password.txt")
     default_dimension: int = Field(default=384)
     primary_key: str = Field(
         default="flouds_vector_id",
@@ -91,7 +91,7 @@ class SecurityConfig(BaseModel):
     """
 
     enabled: bool = Field(default=False)
-    clients_db_path: str = Field(default="clients.db")
+    clients_db_path: str = Field(default="/app/data/clients.db")
 
 
 class AppSettings(BaseModel):

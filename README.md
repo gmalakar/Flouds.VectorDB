@@ -116,6 +116,19 @@ You can override any setting using environment variables or the `.env` file.
    pip install -r app/requirements.txt
    ```
 
+  On Windows PowerShell, we ship an updated `Activate.ps1` that also sets the
+  `FLOUDS_API_ENV` to `Development` for convenience. To ensure the environment
+  variable is applied to your current session, dot-source the script instead of
+  invoking it with `&`:
+
+  ```powershell
+  # Dot-source so session variables are applied
+  . .\.venv\Scripts\Activate.ps1
+  ```
+  If you prefer the call operator, run `& .\.venv\Scripts\Activate.ps1` but
+  note some shells may not propagate the `FLOUDS_API_ENV` process variable to
+  the interactive session.
+
 3. **Configure settings:**
    - Edit [app/config/appsettings.json](app/config/appsettings.json) for your Milvus and server settings.
    - Optionally, create environment-specific overrides such as [app/config/appsettings.development.json](app/config/appsettings.development.json).
@@ -161,6 +174,11 @@ FLOUDS_LOG_PATH=./logs
 - It is used to set environment variables for Milvus connection, logging, debug mode, and other runtime options.
 - You can keep different `.env` files for development, testing, and production.
 - The container will read this file at startup and apply the settings automatically.
+
+Note about activation: the PowerShell activation script (`.venv\Scripts\Activate.ps1`)
+now sets `FLOUDS_API_ENV=Development` when activated (dot-sourced). If you use
+VS Code, ensure the setting `python.terminal.activateEnvironment` is enabled so
+the editor's integrated terminal applies the venv activation correctly.
 
 ---
 

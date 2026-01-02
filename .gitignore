@@ -101,3 +101,9 @@ local_settings.py
 dmypy.json
 clean_proj.bat
 clean_proj.bat
+
+# others (explicit any-directory matches)
+**/.encryption_key
+**/admin_credentials.txt
+**/admin_console.txt
+**/clients.db

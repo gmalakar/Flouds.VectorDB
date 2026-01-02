@@ -42,7 +42,8 @@ ENV PYTHONUNBUFFERED=1 \
     FLOUDS_API_ENV=Production \
     APP_DEBUG_MODE=0 \
     FLOUDS_LOG_PATH=/flouds-vector/logs \
-    FLOUDS_APP_SECRETS=/flouds-vector/secrets \
+    FLOUDS_CLIENTS_DB=/flouds-vector/data/clients.db \
+    FLOUDS_APP_SECRETS=/flouds-vector/data/secrets \
     PATH=/opt/venv/bin:$PATH
 
 # Purge tar if present to avoid CVE; keep runtime minimal
@@ -59,10 +60,12 @@ WORKDIR ${PYTHONPATH}
 # Copy application code
 COPY app ./app
 
-# Create required directories
-RUN mkdir -p $FLOUDS_APP_SECRETS $FLOUDS_LOG_PATH && \
-    chmod 755 $FLOUDS_APP_SECRETS && \
-    chmod 777 $FLOUDS_LOG_PATH
+# Create required directories (secrets under data path, logs and clients DB parent)
+RUN mkdir -p "$FLOUDS_APP_SECRETS" "$FLOUDS_LOG_PATH" "$(dirname "$FLOUDS_CLIENTS_DB")" && \
+    # Make secrets writable (apps may run as non-root and need to write secrets)
+    chmod 777 "$FLOUDS_APP_SECRETS" && \
+    chmod 777 "$FLOUDS_LOG_PATH" && \
+    chmod 777 "$(dirname "$FLOUDS_CLIENTS_DB")"
 
 EXPOSE 19680
 

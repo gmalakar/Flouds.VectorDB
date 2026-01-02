@@ -73,7 +73,9 @@ done
 
 # Default configuration
 FLOUDS_VECTOR_NETWORK="flouds_vector_network"
-CONTAINER_PASSWORD_FILE="/flouds-vector/secrets/password.txt"
+CONTAINER_DATA_PATH="/flouds-vector/data"
+CONTAINER_SECRET_PATH="$CONTAINER_DATA_PATH/secrets"
+CONTAINER_PASSWORD_FILE="$CONTAINER_SECRET_PATH/password.txt"
 CONTAINER_LOG_PATH="/flouds-vector/logs"
 
 # Helper functions
@@ -176,6 +178,17 @@ else
     set +o allexport
 fi
 
+# Require FLOUDS_DATA_PATH_AT_HOST and FLOUDS_SECRET_PATH_AT_HOST to be set for host mapping
+if [[ -z "$FLOUDS_DATA_PATH_AT_HOST" ]]; then
+    echo "❌ Error: FLOUDS_DATA_PATH_AT_HOST must be set in the .env file or environment."
+    exit 1
+fi
+
+if [[ -z "$FLOUDS_SECRET_PATH_AT_HOST" ]]; then
+    echo "❌ Error: FLOUDS_SECRET_PATH_AT_HOST must be set in the .env file or environment."
+    exit 1
+fi
+
 # Set defaults for required variables
 : "${VECTORDB_NETWORK:=milvus_network}"
 : "${VECTORDB_ENDPOINT:=milvus-standalone}"
@@ -242,22 +255,35 @@ while IFS='=' read -r key value; do
     DOCKER_ARGS+=(-e "$key=$value")
 done < <(grep -v '^[[:space:]]*$' "$ENV_FILE" 2>/dev/null || true)
 
-# Add password file if specified
-if [[ -n "$VECTORDB_PASSWORD_FILE" ]]; then
-    passwordFileDir=$(dirname "$VECTORDB_PASSWORD_FILE")
-    
-    # Check if password file directory exists and is writable
-    set_directory_permissions "$passwordFileDir" "Password file"
-    
-    echo "Mounting password file: $VECTORDB_PASSWORD_FILE → $CONTAINER_PASSWORD_FILE"
-    DOCKER_ARGS+=(-v "$VECTORDB_PASSWORD_FILE:$CONTAINER_PASSWORD_FILE:rw")
-    DOCKER_ARGS+=(-e "VECTORDB_PASSWORD_FILE=$CONTAINER_PASSWORD_FILE")
+# Data directory mapping (SQLite database) — require host data mapping and set clients DB env
+if [[ -n "$FLOUDS_DATA_PATH_AT_HOST" ]]; then
+    host_data_path="$FLOUDS_DATA_PATH_AT_HOST"
+    echo "Mapping Data directory: $host_data_path -> $CONTAINER_DATA_PATH"
+    DOCKER_ARGS+=(-v "$host_data_path:$CONTAINER_DATA_PATH:rw")
+
+    # Determine clients DB filename (allow override via env)
+    CLIENTS_FILENAME="${FLOUDS_CLIENTS_DB_FILENAME:-clients.db}"
+    echo "Using FLOUDS_CLIENTS_DB_FILENAME: $CLIENTS_FILENAME"
+    DOCKER_ARGS+=(-e "FLOUDS_CLIENTS_DB=$CONTAINER_DATA_PATH/$CLIENTS_FILENAME")
+fi
+
+# Secrets handling: mount FLOUDS_SECRET_PATH_AT_HOST read-only and export VECTORDB_PASSWORD_FILE
+if [[ -n "$FLOUDS_SECRET_PATH_AT_HOST" ]]; then
+    host_secret_dir="$FLOUDS_SECRET_PATH_AT_HOST"
+    set_directory_permissions "$host_secret_dir" "Secrets"
+
+    echo "Mapping Secrets directory: $host_secret_dir -> $CONTAINER_SECRET_PATH"
+    DOCKER_ARGS+=(-v "$host_secret_dir:$CONTAINER_SECRET_PATH:ro")
+
+    # Determine password filename (allow override via env)
+    PASSWORD_FILENAME="${VECTORDB_PASSWORD_FILENAME:-password.txt}"
+    echo "Using VECTORDB_PASSWORD_FILENAME: $PASSWORD_FILENAME"
+
+    # Export container-side env pointing into mounted secrets dir
+    DOCKER_ARGS+=(-e "VECTORDB_PASSWORD_FILE=$CONTAINER_SECRET_PATH/$PASSWORD_FILENAME")
 else
-    # Add password directly if no password file
-    if [[ -n "$VECTORDB_PASSWORD" ]]; then
-        echo "Setting VECTORDB_PASSWORD from environment"
-        DOCKER_ARGS+=(-e "VECTORDB_PASSWORD=$VECTORDB_PASSWORD")
-    fi
+    echo "❌ Error: FLOUDS_SECRET_PATH_AT_HOST must be set to mount secrets directory."
+    exit 1
 fi
 
 # Add log directory if specified

@@ -1,15 +1,14 @@
-# =============================================================================
+﻿# =============================================================================
 # File: key_manager.py
-# Date: 2025-01-27
-# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# Date: 2026-01-01
+# Clean KeyManager implementation
 # =============================================================================
 
-import base64
 import os
 import sqlite3
 from contextlib import contextmanager
 from functools import lru_cache
-from typing import Optional, Set
+from typing import Optional, Set, Tuple
 
 from cryptography.fernet import Fernet
 
@@ -34,23 +33,24 @@ class Client:
 
 
 class KeyManager:
-    """Manages client credentials using SQLite with encryption."""
+    """Manage clients DB and encryption for client secrets.
 
-    def __init__(self, db_path: str = None):
+    Keeps secrets out of logs and ensures admin user exists.
+    """
+
+    def __init__(self, db_path: Optional[str] = None):
         self.db_path = db_path or getattr(
-            APP_SETTINGS.security, "clients_db_path", "clients.db"
+            APP_SETTINGS.security, "clients_db_path", "/app/data/clients.db"
         )
-        self.clients = {}
+        self.clients: dict[str, Client] = {}
         self._token_cache: Set[str] = set()
         self._admin_cache: Set[str] = set()
 
-        # Ensure directory exists
         db_dir = os.path.dirname(os.path.abspath(self.db_path))
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir, exist_ok=True)
-            logger.info(f"Created database directory: {db_dir}")
+            logger.info("Created database directory: %s", db_dir)
 
-        # Initialize database schema
         self._init_database()
         logger.info("Using clients database: %s", sanitize_for_log(self.db_path))
 
@@ -60,11 +60,10 @@ class KeyManager:
 
     @contextmanager
     def _get_connection(self):
-        """Get database connection with automatic commit/rollback."""
         conn = None
         try:
             conn = sqlite3.connect(self.db_path, timeout=10.0)
-            conn.row_factory = sqlite3.Row  # Access columns by name
+            conn.row_factory = sqlite3.Row
             yield conn
             conn.commit()
         except sqlite3.OperationalError as e:
@@ -77,21 +76,14 @@ class KeyManager:
                 conn.rollback()
             logger.error(f"Database corruption: {e}")
             raise DatabaseCorruptionError(f"Database corruption detected: {e}")
-        except Exception as e:
-            if conn:
-                conn.rollback()
-            raise
         finally:
             if conn:
                 conn.close()
 
-    def _init_database(self):
-        """Initialize database schema."""
+    def _init_database(self) -> None:
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-
-                # Create clients table with indexes
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS clients (
@@ -104,7 +96,6 @@ class KeyManager:
                 """
                 )
 
-                # Create index on client_type for faster admin lookups
                 cursor.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_client_type 
@@ -112,7 +103,6 @@ class KeyManager:
                 """
                 )
 
-                # Create trigger to update updated_at
                 cursor.execute(
                     """
                     CREATE TRIGGER IF NOT EXISTS update_client_timestamp 
@@ -125,51 +115,32 @@ class KeyManager:
                 )
 
                 logger.info("Database schema initialized successfully")
-
-        except DatabaseCorruptionError as e:
-            logger.warning(f"Database corruption detected: {e}")
+        except (DatabaseCorruptionError, sqlite3.DatabaseError) as e:
+            logger.warning("Database init error: %s", str(e))
             self._recover_database()
-        except sqlite3.DatabaseError as e:
-            error_msg = str(e).lower()
-            if (
-                "not a database" in error_msg
-                or "malformed" in error_msg
-                or "corrupt" in error_msg
-            ):
-                logger.warning(f"Database file is corrupted or wrong format: {e}")
-                self._recover_database()
-            else:
-                raise DatabaseConnectionError(f"Cannot initialize database: {e}")
-        except sqlite3.OperationalError as e:
-            if "malformed" in str(e).lower() or "corrupt" in str(e).lower():
-                logger.warning(f"Database operational error: {e}")
-                self._recover_database()
-            else:
-                raise DatabaseConnectionError(f"Cannot initialize database: {e}")
 
-    def _recover_database(self):
-        """Attempt to recover from corrupted database."""
+    def _recover_database(self) -> None:
         logger.warning("Attempting database recovery...")
-
         if os.path.exists(self.db_path):
             backup_path = f"{self.db_path}.backup"
             try:
                 if os.path.exists(backup_path):
                     os.remove(backup_path)
                 os.rename(self.db_path, backup_path)
-                logger.info(f"Backed up corrupted database to {backup_path}")
+                logger.info("Backed up corrupted database to %s", backup_path)
             except OSError as e:
-                logger.error(f"Failed to backup corrupted database: {e}")
+                logger.error("Failed to backup corrupted database: %s", str(e))
                 try:
                     os.remove(self.db_path)
-                    logger.info(f"Removed corrupted database: {self.db_path}")
+                    logger.info("Removed corrupted database: %s", self.db_path)
                 except OSError as remove_error:
-                    logger.error(f"Failed to remove corrupted database: {remove_error}")
+                    logger.error(
+                        "Failed to remove corrupted database: %s", str(remove_error)
+                    )
 
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS clients (
@@ -181,14 +152,12 @@ class KeyManager:
                     )
                 """
                 )
-
                 cursor.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_client_type 
                     ON clients(client_type)
                 """
                 )
-
                 cursor.execute(
                     """
                     CREATE TRIGGER IF NOT EXISTS update_client_timestamp 
@@ -199,7 +168,6 @@ class KeyManager:
                     END
                 """
                 )
-
                 logger.info("Database recreated successfully")
         except Exception as e:
             raise DatabaseCorruptionError(f"Cannot recover database: {e}")
@@ -207,7 +175,15 @@ class KeyManager:
     def _get_or_create_encryption_key(self) -> bytes:
         key_env = os.getenv("FLOUDS_ENCRYPTION_KEY")
         if key_env:
-            return base64.urlsafe_b64decode(key_env.encode())
+            candidate = key_env.encode()
+            try:
+                # Validation: Fernet accepts urlsafe base64-encoded 32-byte keys as bytes
+                Fernet(candidate)
+                return candidate
+            except Exception as e:
+                raise ValueError(
+                    "FLOUDS_ENCRYPTION_KEY must be 32 url-safe base64-encoded bytes."
+                ) from e
 
         key_dir = os.path.dirname(os.path.abspath(self.db_path))
         key_file = os.path.join(key_dir, ".encryption_key")
@@ -224,33 +200,37 @@ class KeyManager:
         return key
 
     @lru_cache(maxsize=1000)
-    def _parse_token(self, token: str) -> Optional[tuple[str, str]]:
-        if "|" not in token:
-            return None
-        try:
-            client_id, client_secret = token.split("|", 1)
-            return (client_id, client_secret)
-        except (ValueError, IndexError):
-            return None
+    def _parse_token(self, token: str) -> Optional[Tuple[str, str]]:
+        if "|" in token:
+            try:
+                client_id, client_secret = token.split("|", 1)
+                return client_id, client_secret
+            except Exception:
+                return None
+        if ":" in token:
+            try:
+                client_id, client_secret = token.split(":", 1)
+                return client_id, client_secret
+            except Exception:
+                return None
+        return None
 
     def authenticate_client(self, token: str) -> Optional[Client]:
         try:
-            # Token must match exactly one in the token cache
             if token not in self._token_cache:
-                logger.error("Token not found in token cache.")
+                logger.debug("Token not found in token cache.")
                 return None
             parsed = self._parse_token(token)
             if not parsed:
-                logger.error("Token failed to parse.")
+                logger.debug("Token failed to parse.")
                 return None
             client_id, client_secret = parsed
             client = self.clients.get(client_id)
             if client and client.client_secret == client_secret:
                 return client
-            logger.error("Client credentials do not match.")
-            return None
-        except (ValueError, TypeError) as e:
-            logger.error("Invalid API token format: %s", str(e))
+            logger.debug(
+                "Client credentials do not match for %s", sanitize_for_log(client_id)
+            )
             return None
         except Exception as e:
             logger.error("Authentication error: %s", str(e))
@@ -260,7 +240,7 @@ class KeyManager:
         return client_id in self._admin_cache
 
     def get_all_tokens(self) -> Set[str]:
-        return self._token_cache.copy()
+        return set(self._token_cache)
 
     def add_client(
         self, client_id: str, client_secret: str, client_type: str = "api_user"
@@ -270,10 +250,7 @@ class KeyManager:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO clients (client_id, client_secret, client_type)
-                    VALUES (?, ?, ?)
-                """,
+                    "INSERT OR REPLACE INTO clients (client_id, client_secret, client_type) VALUES (?, ?, ?)",
                     (client_id, encrypted_secret, client_type),
                 )
             self.clients[client_id] = Client(client_id, client_secret, client_type)
@@ -289,11 +266,6 @@ class KeyManager:
             )
             return True
         except (DatabaseConnectionError, DatabaseCorruptionError):
-            return False
-        except (ValueError, TypeError) as e:
-            logger.error(
-                "Invalid client data for %s: %s", sanitize_for_log(client_id), str(e)
-            )
             return False
         except Exception as e:
             logger.error(
@@ -314,7 +286,7 @@ class KeyManager:
                     self._token_cache.discard(token)
                     self._admin_cache.discard(client_id)
                 self._parse_token.cache_clear()
-                logger.info(f"Removed client: {client_id}")
+                logger.info("Removed client: %s", sanitize_for_log(client_id))
                 return True
             return False
         except (DatabaseConnectionError, DatabaseCorruptionError):
@@ -325,25 +297,26 @@ class KeyManager:
             )
             return False
 
-    def load_clients(self):
+    def load_clients(self) -> None:
         try:
             self.clients = {}
             if not os.path.exists(self.db_path):
                 logger.info(
-                    f"Database file {self.db_path} does not exist, will be created"
+                    "Database file %s does not exist, will be created",
+                    sanitize_for_log(self.db_path),
                 )
                 return
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    """
-                    SELECT client_id, client_secret, client_type 
-                    FROM clients
-                """
+                    "SELECT client_id, client_secret, client_type FROM clients"
                 )
                 rows = cursor.fetchall()
                 if not rows:
-                    logger.info(f"No clients found in database {self.db_path}")
+                    logger.info(
+                        "No clients found in database %s",
+                        sanitize_for_log(self.db_path),
+                    )
                     return
                 for row in rows:
                     try:
@@ -356,7 +329,9 @@ class KeyManager:
                             ).decode()
                         except Exception as decrypt_error:
                             logger.error(
-                                f"Failed to decrypt client secret for {client_id}: {decrypt_error}"
+                                "Failed to decrypt client secret for %s: %s",
+                                sanitize_for_log(client_id),
+                                str(decrypt_error),
                             )
                             raise DecryptionError(
                                 f"Cannot decrypt client credentials: {decrypt_error}"
@@ -368,30 +343,29 @@ class KeyManager:
                         if client_type == "admin":
                             self._admin_cache.add(client_id)
                     except DecryptionError:
-                        logger.error(f"Decryption failed for client {client_id}")
-                        continue
-                    except (KeyError, ValueError) as client_error:
                         logger.error(
-                            f"Invalid client data for {client_id}: {client_error}"
+                            "Decryption failed for client %s",
+                            sanitize_for_log(client_id),
                         )
                         continue
                     except Exception as client_error:
                         logger.error(
-                            f"Failed to load client {client_id}: {client_error}"
+                            "Failed to load client %s: %s",
+                            sanitize_for_log(client_id),
+                            str(client_error),
                         )
                         continue
-                logger.info(f"Loaded {len(self.clients)} clients from {self.db_path}")
+                logger.info(
+                    "Loaded %d clients from %s",
+                    len(self.clients),
+                    sanitize_for_log(self.db_path),
+                )
         except (DatabaseConnectionError, DatabaseCorruptionError) as e:
             logger.error("Database error loading clients: %s", str(e))
             self.clients = {}
             self._token_cache.clear()
             self._admin_cache.clear()
             raise
-        except Exception as e:
-            logger.error("Failed to load clients: %s", str(e))
-            self.clients = {}
-            self._token_cache.clear()
-            self._admin_cache.clear()
 
     def get_client_stats(self) -> dict:
         try:
@@ -400,11 +374,7 @@ class KeyManager:
                 cursor.execute("SELECT COUNT(*) as total FROM clients")
                 total = cursor.fetchone()["total"]
                 cursor.execute(
-                    """
-                    SELECT client_type, COUNT(*) as count 
-                    FROM clients 
-                    GROUP BY client_type
-                """
+                    "SELECT client_type, COUNT(*) as count FROM clients GROUP BY client_type"
                 )
                 by_type = {
                     row["client_type"]: row["count"] for row in cursor.fetchall()
@@ -419,83 +389,96 @@ class KeyManager:
                     ),
                 }
         except Exception as e:
-            logger.error(f"Failed to get client stats: {e}")
+            logger.error("Failed to get client stats: %s", str(e))
             return {
                 "total_clients": len(self.clients),
                 "by_type": {},
                 "database_size_bytes": 0,
             }
 
-    def close(self):
+    def close(self) -> None:
         self._token_cache.clear()
         self._admin_cache.clear()
-        self._parse_token.cache_clear()
+        try:
+            self._parse_token.cache_clear()
+        except Exception:
+            pass
 
-    def __enter__(self):
-        return self
+    def _write_admin_files(self, admin_id: str, admin_secret: str) -> None:
+        from datetime import datetime
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+        db_dir = os.path.dirname(os.path.abspath(self.db_path))
+        console_file_path = os.path.join(db_dir, "admin_console.txt")
+        creds_file = os.path.join(db_dir, "admin_credentials.txt")
 
+        console_contents = [
+            "=== ADMIN CREDENTIALS CREATED ===\n",
+            f"Admin Client ID: {admin_id}\n",
+            f"Admin Secret: {admin_secret}\n",
+            f"Admin Token: {admin_id}|{admin_secret}\n",
+            "=== SAVE THESE CREDENTIALS ===\n",
+        ]
+        try:
+            with safe_open(
+                console_file_path, db_dir, "w", encoding="utf-8"
+            ) as console_file:
+                console_file.writelines(console_contents)
+            logger.warning(
+                "Admin credentials saved to %s", sanitize_for_log(console_file_path)
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to save admin console to %s: %s",
+                sanitize_for_log(console_file_path),
+                str(e),
+            )
 
-key_manager = KeyManager()
+        try:
+            with safe_open(creds_file, db_dir, "w", encoding="utf-8") as f:
+                f.write("Flouds VectorDB Admin Credentials\n")
+                f.write(f"Generated: {datetime.now().isoformat()}\n")
+                f.write("\n")
+                f.write(f"Client ID: {admin_id}\n")
+                f.write(f"Client Secret: {admin_secret}\n")
+                f.write("\n")
+                f.write("Usage:\n")
+                f.write(f"Authorization: Bearer {admin_id}|{admin_secret}\n")
+                f.write("\n")
+                f.write("Example:\n")
+                f.write(
+                    f'curl -H "Authorization: Bearer {admin_id}|{admin_secret}" \\\n+'
+                )
+                f.write("  http://localhost:19680/api/v1/admin/clients\n")
+            logger.warning(
+                "Admin credentials saved to: %s",
+                sanitize_for_log(os.path.abspath(creds_file)),
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to save admin credentials to file %s: %s",
+                sanitize_for_log(creds_file),
+                str(e),
+            )
 
-
-def _ensure_admin_exists():
-    admin_exists = any(
-        client.client_type == "admin" for client in key_manager.clients.values()
-    )
-    if not admin_exists:
-        from secrets import token_urlsafe
-
-        admin_id = "admin"
-        # Generate a secret that does not contain ':' or '|'
+    def ensure_admin_exists(self) -> None:
+        admin_exists = any(c.client_type == "admin" for c in self.clients.values())
+        if admin_exists:
+            return
         import secrets
 
+        admin_id = "admin"
         while True:
             admin_secret = secrets.token_urlsafe(32)
             if ":" not in admin_secret and "|" not in admin_secret:
                 break
-        if key_manager.add_client(admin_id, admin_secret, "admin"):
+        if self.add_client(admin_id, admin_secret, "admin"):
             try:
-                with open("admin_console.txt", "w", encoding="utf-8") as console_file:
-                    console_file.write("=== ADMIN CREDENTIALS CREATED ===\n")
-                    console_file.write(f"Admin Client ID: {admin_id}\n")
-                    console_file.write(f"Admin Secret: {admin_secret}\n")
-                    console_file.write(f"Admin Token: {admin_id}|{admin_secret}\n")
-                    console_file.write("=== SAVE THESE CREDENTIALS ===\n")
-                logger.warning("Admin credentials saved to admin_console.txt")
+                self._write_admin_files(admin_id, admin_secret)
             except Exception as e:
-                logger.error(f"Failed to save console output: {e}")
-            try:
-                import os
-                from datetime import datetime
-
-                # Write admin_credentials.txt to the same directory as the DB
-                db_dir = os.path.dirname(os.path.abspath(key_manager.db_path))
-                creds_file = os.path.join(db_dir, "admin_credentials.txt")
-                with safe_open(creds_file, db_dir, "w", encoding="utf-8") as f:
-                    f.write(f"Flouds VectorDB Admin Credentials\n")
-                    f.write(f"Generated: {datetime.now().isoformat()}\n")
-                    f.write(f"\n")
-                    f.write(f"Client ID: {admin_id}\n")
-                    f.write(f"Client Secret: {admin_secret}\n")
-                    f.write(f"\n")
-                    f.write(f"Usage:\n")
-                    f.write(f"Authorization: Bearer {admin_id}|{admin_secret}\n")
-                    f.write(f"\n")
-                    f.write(f"Example:\n")
-                    f.write(
-                        f'curl -H "Authorization: Bearer {admin_id}|{admin_secret}" \\\n'
-                    )
-                    f.write(f"  http://localhost:19680/api/v1/admin/clients\n")
-                logger.warning(
-                    f"Admin credentials saved to: {os.path.abspath(creds_file)}"
-                )
-            except Exception as e:
-                logger.error(f"Failed to save admin credentials to file: {e}")
+                logger.error("Failed to create admin credential files: %s", str(e))
         else:
             logger.error("Failed to create admin user")
 
 
-_ensure_admin_exists()
+key_manager = KeyManager()
+key_manager.ensure_admin_exists()
