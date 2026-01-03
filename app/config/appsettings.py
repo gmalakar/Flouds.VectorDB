@@ -56,7 +56,7 @@ class VectorDBConfig(BaseModel):
     Vector database configuration settings.
     """
 
-    endpoint: str = Field(default="localhost")
+    container_name: str = Field(default="localhost")
     port: int = Field(default=19530)
     username: str = Field(default="root")
     password: str = Field(default="")
@@ -92,6 +92,14 @@ class SecurityConfig(BaseModel):
 
     enabled: bool = Field(default=False)
     clients_db_path: str = Field(default="/app/data/clients.db")
+    cors_origins: list[str] = Field(
+        default_factory=lambda: ["*"],
+        description="List of allowed CORS origins. Use '*' to allow all.",
+    )
+    trusted_hosts: list[str] = Field(
+        default_factory=lambda: ["*"],
+        description="List of trusted hostnames for TrustedHostMiddleware. Use '*' to allow all.",
+    )
 
 
 class AppSettings(BaseModel):

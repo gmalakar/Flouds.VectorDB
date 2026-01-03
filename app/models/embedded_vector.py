@@ -4,7 +4,7 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -26,7 +26,7 @@ class EmbeddedVector(BaseModel):
     key: str = Field(..., description="The primary key.")
     chunk: str = Field(..., description="The text chunk.")
     model: str = Field(..., description="The model used for embedding.")
-    metadata: dict = Field(
+    metadata: Optional[dict] = Field(
         None,
         description="Metadata associated with the embedding, such as source or context.",
     )

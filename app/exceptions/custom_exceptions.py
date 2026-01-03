@@ -41,56 +41,6 @@ class DecryptionError(FloudsVectorError):
     """
 
     pass
-    pass
-
-
-# Place new exceptions after FloudsVectorError is defined
-class DatabaseConnectionError(FloudsVectorError):
-    """
-    Raised when database connection fails.
-    """
-
-    pass
-
-
-class DatabaseCorruptionError(FloudsVectorError):
-    """
-    Raised when database file is corrupted.
-    """
-
-    pass
-
-
-class DecryptionError(FloudsVectorError):
-    """
-    Raised when decryption of data fails.
-    """
-
-    pass
-
-
-class DatabaseConnectionError(FloudsVectorError):
-    """
-    Raised when database connection fails.
-    """
-
-    pass
-
-
-class DatabaseCorruptionError(FloudsVectorError):
-    """
-    Raised when database file is corrupted.
-    """
-
-    pass
-
-
-class DecryptionError(FloudsVectorError):
-    """
-    Raised when decryption of data fails.
-    """
-
-    pass
 
 
 class ConfigurationError(FloudsVectorError):

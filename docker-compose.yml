@@ -50,7 +50,7 @@ services:
     ports:
       - "19680:19680"
     environment:
-      - VECTORDB_ENDPOINT=milvus
+      - VECTORDB_CONTAINER_NAME=milvus
       - VECTORDB_PORT=19530
       - VECTORDB_USERNAME=root
       - VECTORDB_PASSWORD=Milvus
@@ -64,6 +64,7 @@ volumes:
   milvus_data:
   etcd_data:
   minio_data:
+
 
 networks:
   milvus_network:

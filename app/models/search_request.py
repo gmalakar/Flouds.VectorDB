@@ -110,7 +110,7 @@ class SearchEmbeddedRequest(BaseRequest, SearchEmbeddedBase):
         description="Distance metric for similarity calculation. Options: 'L2', 'IP', 'COSINE'. Default: 'COSINE'.",
     )
 
-    text_filter: str = Field(
+    text_filter: Optional[str] = Field(
         None,
         description="Optional text filter for keyword-based filtering within chunk content. Used in hybrid search.",
     )

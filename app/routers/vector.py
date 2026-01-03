@@ -5,8 +5,9 @@
 # =============================================================================
 
 import asyncio
+from typing import List, Union
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.dependencies.auth import get_db_token
 from app.logger import get_logger
@@ -26,7 +27,7 @@ router: APIRouter = APIRouter()
 logger = get_logger("router")
 
 
-def log_response(response, operation: str) -> None:
+def log_response(response: Union[BaseResponse, ListResponse], operation: str) -> None:
     """
     Logs the response for a given operation with sanitization.
 
@@ -46,18 +47,18 @@ def log_response(response, operation: str) -> None:
         logger.info(f"{operation} successful for tenant: {tenant_code}")
 
         if hasattr(response, "results") and response.results:
-            result_keys = (
-                list(response.results.keys())
-                if isinstance(response.results, dict)
-                else "[data]"
-            )
+            # `results` is typed as `Dict[str, Any]` on known responses; use keys directly.
+            try:
+                result_keys: Union[List[str], str] = list(response.results.keys())
+            except Exception:
+                result_keys = "[data]"
+
             logger.debug(f"{operation} response contains: {result_keys}")
 
 
 @router.post("/set_vector_store", response_model=ListResponse)
 async def set_vector_store(
     request: SetVectorStoreRequest,
-    http_request: Request,
     db_secret: str = Depends(get_db_token),
 ) -> ListResponse:
     """
@@ -67,15 +68,18 @@ async def set_vector_store(
 
     Args:
         request (SetVectorStoreRequest): The request object with tenant, token, and vector dimension.
-        http_request (Request): FastAPI request to access authenticated client info.
-
     Returns:
         ListResponse: The response with tenant setup details.
     """
     logger.debug(
         f"set_vector_store request for tenant: {sanitize_for_log(request.tenant_code)}"
     )
-    check_tenant_rate_limit(request.tenant_code)
+    tenant_code = request.tenant_code
+    if tenant_code is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="tenant_code is required"
+        )
+    check_tenant_rate_limit(tenant_code)
 
     extra_fields = CommonUtils.parse_extra_fields(request, SetVectorStoreRequest)
     response: ListResponse = await asyncio.to_thread(
@@ -88,7 +92,6 @@ async def set_vector_store(
 @router.post("/insert", response_model=BaseResponse)
 async def insert(
     request: InsertEmbeddedRequest,
-    http_request: Request,
     db_secret: str = Depends(get_db_token),
 ) -> BaseResponse:
     """
@@ -97,7 +100,6 @@ async def insert(
 
     Args:
         request (InsertEmbeddedRequest): The request object with tenant, token, and data.
-        http_request (Request): FastAPI request to access authenticated client info.
         Requires `Flouds-VectorDB-Token` header for database credentials.
 
     Returns:
@@ -106,7 +108,12 @@ async def insert(
     logger.debug(
         f"insert request for tenant: {sanitize_for_log(request.tenant_code)}, vectors: {len(request.data)}"
     )
-    check_tenant_rate_limit(request.tenant_code)
+    tenant_code = request.tenant_code
+    if tenant_code is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="tenant_code is required"
+        )
+    check_tenant_rate_limit(tenant_code)
 
     extra_fields = CommonUtils.parse_extra_fields(request, InsertEmbeddedRequest)
     response: BaseResponse = await asyncio.to_thread(
@@ -122,7 +129,6 @@ async def insert(
 @router.post("/search", response_model=SearchEmbeddedResponse)
 async def search(
     request: SearchEmbeddedRequest,
-    http_request: Request,
     db_secret: str = Depends(get_db_token),
 ) -> SearchEmbeddedResponse:
     """
@@ -131,7 +137,6 @@ async def search(
 
     Args:
         request (SearchEmbeddedRequest): The request object with tenant, token, model, and search parameters.
-        http_request (Request): FastAPI request to access authenticated client info.
         Requires `Flouds-VectorDB-Token` header for database credentials.
 
     Returns:
@@ -140,7 +145,12 @@ async def search(
     logger.debug(
         f"search request for tenant: {sanitize_for_log(request.tenant_code)}, limit: {request.limit}"
     )
-    check_tenant_rate_limit(request.tenant_code)
+    tenant_code = request.tenant_code
+    if tenant_code is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="tenant_code is required"
+        )
+    check_tenant_rate_limit(tenant_code)
 
     extra_fields = CommonUtils.parse_extra_fields(request, SearchEmbeddedRequest)
     response: SearchEmbeddedResponse = await asyncio.to_thread(
@@ -156,7 +166,6 @@ async def search(
 @router.post("/generate_schema", response_model=ListResponse)
 async def generate_schema(
     request: GenerateSchemaRequest,
-    http_request: Request,
     db_secret: str = Depends(get_db_token),
 ) -> ListResponse:
     """
@@ -164,7 +173,6 @@ async def generate_schema(
 
     Args:
         request (GenerateSchemaRequest): The request object with tenant, model, and schema parameters.
-        http_request (Request): FastAPI request to access authenticated client info.
         Requires `Flouds-VectorDB-Token` header for database credentials.
 
     Returns:
@@ -173,7 +181,12 @@ async def generate_schema(
     logger.debug(
         f"generate_schema request for tenant: {sanitize_for_log(request.tenant_code)}, model: {sanitize_for_log(request.model_name)}, dimension: {request.dimension}"
     )
-    check_tenant_rate_limit(request.tenant_code)
+    tenant_code = request.tenant_code
+    if tenant_code is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="tenant_code is required"
+        )
+    check_tenant_rate_limit(tenant_code)
 
     extra_fields = CommonUtils.parse_extra_fields(request, GenerateSchemaRequest)
     response: ListResponse = await asyncio.to_thread(
@@ -187,7 +200,6 @@ async def generate_schema(
 async def flush_collection(
     tenant_code: str,
     model_name: str,
-    http_request: Request,
     db_secret: str = Depends(get_db_token),
 ) -> BaseResponse:
     """

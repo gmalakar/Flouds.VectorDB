@@ -5,6 +5,8 @@
 # =============================================================================
 
 
+from typing import Any, Dict
+
 from pydantic import Field
 
 from app.models.base_response import BaseResponse
@@ -18,6 +20,6 @@ class ListResponse(BaseResponse):
         results (dict): The dictionary containing the list of items.
     """
 
-    results: dict = Field(
+    results: Dict[str, Any] = Field(
         ..., description="The dictionary containing the list of items."
     )

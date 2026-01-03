@@ -38,6 +38,20 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         self.request_count = defaultdict(int)
         self.request_times = defaultdict(lambda: deque(maxlen=self.max_samples))
 
+    def _cleanup_old_endpoints(self) -> None:
+        """Remove least-recently used endpoints until we are under the limit."""
+        try:
+            # Determine endpoints with the smallest sample count and remove them first
+            while len(self.request_count) > self.max_endpoints:
+                # choose endpoint with smallest number of samples
+                victim = min(
+                    self.request_times.keys(), key=lambda k: len(self.request_times[k])
+                )
+                del self.request_times[victim]
+                del self.request_count[victim]
+        except Exception:
+            logger.debug("Failed to cleanup old endpoints in metrics middleware")
+
     async def dispatch(self, request: Request, call_next) -> object:
         """
         Intercept requests to collect metrics and log slow requests.

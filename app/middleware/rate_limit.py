@@ -7,9 +7,11 @@
 import json
 import time
 from collections import defaultdict
+from typing import Optional
 
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from app.logger import get_logger
 from app.utils.error_formatter import format_rate_limit_response
@@ -40,7 +42,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.clients = defaultdict(list)
         self.tenants = defaultdict(list)
 
-    async def dispatch(self, request: Request, call_next) -> object:
+    async def dispatch(self, request: Request, call_next) -> Response:
         """
         Intercept requests and enforce rate limits by tenant or IP.
 
@@ -61,8 +63,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             key = f"tenant:{tenant_code}"
             limit_calls = self.calls * 2  # Higher limit for authenticated tenants
         else:
-            # Rate limit by IP for non-tenant requests
-            key = f"ip:{request.client.host}"
+            # Rate limit by IP for non-tenant requests; request.client may be None
+            client = getattr(request, "client", None)
+            client_host = client.host if client is not None else ""
+            key = f"ip:{client_host}"
             limit_calls = self.calls
 
         # Clean old requests
@@ -90,7 +94,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         return response
 
-    async def _extract_tenant_code(self, request: Request) -> str:
+    async def _extract_tenant_code(self, request: Request) -> Optional[str]:
         """
         Extract tenant_code from request body if present.
 

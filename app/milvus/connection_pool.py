@@ -6,7 +6,7 @@
 
 import time
 from threading import Lock
-from typing import Dict
+from typing import Dict, Optional
 
 from pymilvus import MilvusClient
 
@@ -44,7 +44,7 @@ class MilvusConnectionPool:
         self.lock = Lock()
 
     def get_connection(
-        self, uri: str, user: str, password: str, database: str = None
+        self, uri: str, user: str, password: str, database: Optional[str] = None
     ) -> MilvusClient:
         """
         Get or create a MilvusClient connection from the pool.
@@ -80,7 +80,10 @@ class MilvusConnectionPool:
             if len(self.connections) < self.max_connections:
                 try:
                     client = MilvusClient(
-                        uri=uri, user=user, password=password, db_name=database
+                        uri=uri,
+                        user=user,
+                        password=password,
+                        db_name=(database or "default"),
                     )
                     self.connections[key] = {
                         "client": client,
@@ -114,7 +117,10 @@ class MilvusConnectionPool:
                 del self.connections[oldest_key]
 
                 client = MilvusClient(
-                    uri=uri, user=user, password=password, db_name=database
+                    uri=uri,
+                    user=user,
+                    password=password,
+                    db_name=(database or "default"),
                 )
                 self.connections[key] = {
                     "client": client,

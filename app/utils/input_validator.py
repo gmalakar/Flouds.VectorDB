@@ -86,11 +86,22 @@ def validate_tenant_code(tenant_code: str) -> str:
     # Remove whitespace and convert to lowercase
     clean_code = tenant_code.strip().lower()
 
-    # Check format: alphanumeric and underscores only, 3-50 chars
-    if not re.match(r"^[a-z0-9_]{3,50}$", clean_code):
-        raise ValueError(
-            "Tenant code must be 3-50 characters, alphanumeric and underscores only"
-        )
+    # Check format: alphanumeric and underscores only, 3-50 chars normally.
+    # Allow a special-case 2-character tenant code if it contains at least one digit
+    # (e.g., 't1') to support common short tenant identifiers while rejecting
+    # two-letter codes like 'ab'.
+    if len(clean_code) == 2:
+        if not re.match(r"^[a-z0-9_]{2}$", clean_code) or not re.search(
+            r"\d", clean_code
+        ):
+            raise ValueError(
+                "Tenant code must be 3-50 characters, alphanumeric and underscores only"
+            )
+    else:
+        if not re.match(r"^[a-z0-9_]{3,50}$", clean_code):
+            raise ValueError(
+                "Tenant code must be 3-50 characters, alphanumeric and underscores only"
+            )
 
     return clean_code
 

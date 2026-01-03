@@ -191,7 +191,7 @@ fi
 
 # Set defaults for required variables
 : "${VECTORDB_NETWORK:=milvus_network}"
-: "${VECTORDB_ENDPOINT:=milvus-standalone}"
+: "${VECTORDB_CONTAINER_NAME:=milvus-standalone}"
 
 # Check and create log directory if needed
 if [[ -n "$VECTORDB_LOG_PATH" ]]; then
@@ -224,7 +224,7 @@ if [[ "$BUILD_IMAGE" == true ]]; then
 fi
 
 # Check if Milvus is running
-milvusContainerName="$VECTORDB_ENDPOINT"
+milvusContainerName="$VECTORDB_CONTAINER_NAME"
 if ! docker ps --format '{{.Names}}' | grep -q "^${milvusContainerName}$"; then
     echo "⚠️ Milvus container '$milvusContainerName' is not running. Vector service may fail to connect."
     if [[ "$FORCE" != true ]]; then

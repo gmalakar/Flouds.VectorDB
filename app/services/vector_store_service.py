@@ -11,7 +11,7 @@
 import re
 from functools import wraps
 from time import time
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, Callable, Tuple, TypeVar, Union, cast
 
 from app.exceptions.custom_exceptions import (
     AuthenticationError,
@@ -41,8 +41,8 @@ T = TypeVar("T")
 
 
 def service_method(
-    default_response_factory: Callable[..., T],
-) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    default_response_factory: Callable[..., Any],
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator for timing, error handling, and logging in service methods.
 
@@ -55,53 +55,59 @@ def service_method(
         Callable: Decorated function with error handling and timing.
     """
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        def wrapper(*args, **kwargs) -> T:
+        def wrapper(*args, **kwargs) -> Any:
             start_time = time()
-            response, main_logic = func(*args, **kwargs)
+            returned = func(*args, **kwargs)
+            if isinstance(returned, tuple) and len(returned) == 2:
+                response, main_logic = returned  # type: ignore[list-item]
+            else:
+                response = returned  # type: ignore[assignment]
+                main_logic = lambda r: r  # type: ignore[assignment]
+            response_any = cast(Any, response)
             try:
                 return_value = main_logic(response)
             except UserManagementError as e:
-                response.success = False
-                response.message = f"User management error: {str(e)}"
+                response_any.success = False
+                response_any.message = f"User management error: {str(e)}"
                 logger.exception("User management error during operation")
             except MilvusOperationError as e:
-                response.success = False
-                response.message = f"Database operation error: {str(e)}"
+                response_any.success = False
+                response_any.message = f"Database operation error: {str(e)}"
                 logger.exception("Database error during operation")
             except VectorStoreError as e:
-                response.success = False
-                response.message = f"Vector store error: {str(e)}"
+                response_any.success = False
+                response_any.message = f"Vector store error: {str(e)}"
                 logger.exception("Vector store error during operation")
             except SearchError as e:
-                response.success = False
-                response.message = f"Search error: {str(e)}"
+                response_any.success = False
+                response_any.message = f"Search error: {str(e)}"
                 logger.exception("Search error during operation")
             except ValidationError as e:
-                response.success = False
-                response.message = f"Validation error: {str(e)}"
+                response_any.success = False
+                response_any.message = f"Validation error: {str(e)}"
                 logger.exception("Validation error during operation")
             except AuthenticationError as e:
-                response.success = False
-                response.message = f"Database token error: {str(e)}"
+                response_any.success = False
+                response_any.message = f"Database token error: {str(e)}"
                 logger.exception("Authentication error during operation")
             except ValueError as e:
-                response.success = False
-                response.message = f"Invalid data: {str(e)}"
+                response_any.success = False
+                response_any.message = f"Invalid data: {str(e)}"
                 logger.exception("Data validation error during operation")
             except Exception as e:
-                response.success = False
-                response.message = f"Unexpected error: {str(e)}"
+                response_any.success = False
+                response_any.message = f"Unexpected error: {str(e)}"
                 logger.exception("Unexpected error during operation")
             finally:
-                response.time_taken = time() - start_time
+                response_any.time_taken = time() - start_time
                 logger.debug(
-                    f"{func.__name__} completed in {response.time_taken:.2f} seconds."
+                    f"{func.__name__} completed in {response_any.time_taken:.2f} seconds."
                 )
-                return response
+                return response_any
 
-        return cast(Callable[..., T], wrapper)
+        return cast(Callable[..., Any], wrapper)
 
     return decorator
 
@@ -127,7 +133,9 @@ class VectorStoreService:
     )
     def set_user(
         cls, request: SetUserRequest, token: str, **kwargs: Any
-    ) -> ListResponse:
+    ) -> Union[
+        ListResponse, Tuple[ListResponse, Callable[[ListResponse], ListResponse]]
+    ]:
         """
         Set a user in the vector store.
 
@@ -169,11 +177,20 @@ class VectorStoreService:
             success=False,
             message="Password reset failed.",
             time_taken=0.0,
+            root_user=False,
+            reset_flag=False,
+            results={},
         )
     )
     def reset_password(
         cls, request: ResetPasswordRequest, token: str, **kwargs: Any
-    ) -> ResetPasswordResponse:
+    ) -> Union[
+        ResetPasswordResponse,
+        Tuple[
+            ResetPasswordResponse,
+            Callable[[ResetPasswordResponse], ResetPasswordResponse],
+        ],
+    ]:
         """
         Reset a user's password in the vector store.
 
@@ -204,6 +221,9 @@ class VectorStoreService:
                 success=False,
                 message="Password reset failed.",
                 time_taken=0.0,
+                root_user=False,
+                reset_flag=False,
+                results={},
             ),
             main_logic,
         )
@@ -220,7 +240,9 @@ class VectorStoreService:
     )
     def set_vector_store(
         cls, requests: SetVectorStoreRequest, token: str, **kwargs: Any
-    ) -> ListResponse:
+    ) -> Union[
+        ListResponse, Tuple[ListResponse, Callable[[ListResponse], ListResponse]]
+    ]:
         """
         Set up a vector store for a tenant.
 
@@ -236,7 +258,7 @@ class VectorStoreService:
         def main_logic(response: ListResponse):
             logger.debug(f"set_vector_store: kwargs received: {kwargs}")
             response.results = MilvusHelper.set_vector_store(
-                tenant_code=requests.tenant_code, token=token, **kwargs
+                tenant_code=(requests.tenant_code or ""), token=token, **kwargs
             )
             return response
 
@@ -258,11 +280,14 @@ class VectorStoreService:
             success=True,
             message="Vector store inserted successfully.",
             time_taken=0.0,
+            results={},
         )
     )
     def insert_into_vector_store(
         cls, requests: InsertEmbeddedRequest, token: str, **kwargs: Any
-    ) -> BaseResponse:
+    ) -> Union[
+        BaseResponse, Tuple[BaseResponse, Callable[[BaseResponse], BaseResponse]]
+    ]:
         """
         Insert data into the vector store.
 
@@ -295,6 +320,7 @@ class VectorStoreService:
                 success=True,
                 message="Vector store inserted successfully.",
                 time_taken=0.0,
+                results={},
             ),
             main_logic,
         )
@@ -306,11 +332,14 @@ class VectorStoreService:
             success=True,
             message="Collection flushed successfully.",
             time_taken=0.0,
+            results={},
         )
     )
     def flush_vector_store(
         cls, tenant_code: str, model_name: str, token: str
-    ) -> BaseResponse:
+    ) -> Union[
+        BaseResponse, Tuple[BaseResponse, Callable[[BaseResponse], BaseResponse]]
+    ]:
         """
         Flush a tenant's collection in the vector store.
 
@@ -338,6 +367,7 @@ class VectorStoreService:
                 success=True,
                 message="Collection flushed successfully.",
                 time_taken=0.0,
+                results={},
             ),
             main_logic,
         )
@@ -365,11 +395,18 @@ class VectorStoreService:
             message="Vector store search completed successfully.",
             time_taken=0.0,
             data=[],
+            results={},
         )
     )
     def search_in_vector_store(
         cls, requests: SearchEmbeddedRequest, token: str, **kwargs: Any
-    ) -> SearchEmbeddedResponse:
+    ) -> Union[
+        SearchEmbeddedResponse,
+        Tuple[
+            SearchEmbeddedResponse,
+            Callable[[SearchEmbeddedResponse], SearchEmbeddedResponse],
+        ],
+    ]:
         """
         Search for vectors in the vector store.
 
@@ -415,6 +452,7 @@ class VectorStoreService:
                 message="Vector store search completed successfully.",
                 time_taken=0.0,
                 data=[],
+                results={},
             ),
             main_logic,
         )
@@ -431,7 +469,9 @@ class VectorStoreService:
     )
     def generate_schema(
         cls, request: GenerateSchemaRequest, token: str, **kwargs: Any
-    ) -> ListResponse:
+    ) -> Union[
+        ListResponse, Tuple[ListResponse, Callable[[ListResponse], ListResponse]]
+    ]:
         """
         Generate a custom schema for a tenant's collection.
 
@@ -449,14 +489,14 @@ class VectorStoreService:
                 f"Generate schema request: {sanitize_for_log(request.tenant_code)}, model_name: {sanitize_for_log(request.model_name)}"
             )
             response.results = MilvusHelper.generate_schema(
-                tenant_code=request.tenant_code,
+                tenant_code=(request.tenant_code or ""),
                 model_name=request.model_name,
                 dimension=request.dimension,
                 nlist=request.nlist,
                 metric_type=request.metric_type,
                 index_type=request.index_type,
                 metadata_length=request.metadata_length,
-                drop_ratio_build=request.drop_ratio,
+                drop_ratio_build=request.drop_ratio_build,
                 token=token,
                 **kwargs,
             )

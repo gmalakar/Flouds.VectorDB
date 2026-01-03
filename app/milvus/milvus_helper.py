@@ -5,7 +5,7 @@
 # =============================================================================
 
 from threading import Lock
-from typing import Any, List, Tuple
+from typing import Any, List, Optional, Tuple
 
 from app.app_init import APP_SETTINGS
 from app.exceptions.custom_exceptions import (
@@ -442,7 +442,7 @@ class MilvusHelper(BaseMilvus):
 
     @staticmethod
     def __get_or_add_current_volumes(
-        tenant_id: str, user_id: str, password: str, model_name: str
+        tenant_id: "Optional[str]", user_id: str, password: str, model_name: str
     ) -> VectorStore:
         """
         Get or create a VectorStore instance for the given tenant/user/model.
@@ -456,6 +456,9 @@ class MilvusHelper(BaseMilvus):
         Returns:
             VectorStore: The vector store instance.
         """
+        if not tenant_id:
+            raise ValidationError("tenant_id is required")
+
         return MilvusHelper.__vector_stores.get_or_add(
             (tenant_id, user_id, model_name),
             lambda: VectorStore(tenant_id, user_id, password, model_name),

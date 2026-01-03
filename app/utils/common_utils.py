@@ -5,13 +5,16 @@
 # =============================================================================
 
 
+from typing import Any, Dict
+
+
 class CommonUtils:
     """
     Utility class for common dictionary and request operations.
     """
 
     @staticmethod
-    def get_value_from_kwargs(key, **kwargs):
+    def get_value_from_kwargs(key: str, **kwargs) -> Any:
         """
         Get a value from kwargs by key.
 
@@ -25,7 +28,9 @@ class CommonUtils:
         return kwargs.get(key, None)
 
     @staticmethod
-    def add_missing_from_other(target: dict, source: dict) -> dict:
+    def add_missing_from_other(
+        target: Dict[str, Any], source: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Add only missing key-value pairs from source to target dict.
         Existing keys in target are not overwritten.
@@ -43,7 +48,7 @@ class CommonUtils:
         return target
 
     @staticmethod
-    def parse_extra_fields(request, model_class):
+    def parse_extra_fields(request: Any, model_class: Any) -> Dict[str, Any]:
         """
         Extract extra fields from a request that are not defined in the model class.
 
@@ -70,3 +75,27 @@ class CommonUtils:
 
         # Extract extra fields
         return {k: v for k, v in req_dict.items() if k not in model_fields}
+
+    @staticmethod
+    def validate_tenant_match(client_id, header_tcode: str, payload_tcode: str) -> None:
+        """Validate tenant code consistency between header and payload.
+
+        Raises HTTPException (400) on mismatch for non-superadmin clients.
+
+        Args:
+            client_id: the authenticated client's id (or None)
+            header_tcode: tenant code from the header or None/empty
+            payload_tcode: tenant code from the payload or None/empty
+        """
+        from fastapi import HTTPException, status
+
+        from app.modules.key_manager import key_manager
+
+        h = header_tcode or None
+        p = payload_tcode or None
+        if not key_manager.is_super_admin(client_id):
+            if p and h and p != h:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Mismatched tenant_code between header and payload/query parameter",
+                )

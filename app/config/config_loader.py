@@ -6,7 +6,7 @@
 
 import json
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from app.config.appsettings import AppSettings
 from app.logger import get_logger
@@ -20,7 +20,7 @@ class ConfigLoader:
     Loader for application configuration files and environment overrides.
     """
 
-    __appsettings: AppSettings = None
+    __appsettings: Optional[AppSettings] = None
 
     @staticmethod
     def get_app_settings() -> AppSettings:
@@ -35,35 +35,86 @@ class ConfigLoader:
         data = ConfigLoader._load_config_data("appsettings.json", True)
         ConfigLoader.__appsettings = AppSettings(**data)
 
-        # Apply environment variable overrides
+        # Apply environment variable overrides with correct types and sensible fallbacks
         env = os.getenv("FLOUDS_API_ENV", "Production").lower()
         ConfigLoader.__appsettings.app.is_production = env == "production"
-        ConfigLoader.__appsettings.server.port = int(
-            os.getenv("SERVER_PORT", ConfigLoader.__appsettings.server.port)
-        )
-        ConfigLoader.__appsettings.server.host = os.getenv(
-            "SERVER_HOST", ConfigLoader.__appsettings.server.host
-        )
 
-        ConfigLoader.__appsettings.app.debug = os.getenv("APP_DEBUG_MODE", "0") == "1"
+        # Server host/port: support both SERVER_* and FLOUDS_* env names
+        server_port = os.getenv("FLOUDS_PORT", os.getenv("SERVER_PORT"))
+        if server_port is not None:
+            try:
+                ConfigLoader.__appsettings.server.port = int(server_port)
+            except ValueError:
+                logger.warning(
+                    f"Invalid SERVER PORT value: {server_port}; using config value"
+                )
 
-        # Security settings
-        ConfigLoader.__appsettings.security.enabled = (
-            os.getenv(
-                "FLOUDS_SECURITY_ENABLED",
-                str(ConfigLoader.__appsettings.security.enabled),
-            ).lower()
-            == "true"
-        )
+        server_host = os.getenv("FLOUDS_HOST", os.getenv("SERVER_HOST"))
+        if server_host:
+            ConfigLoader.__appsettings.server.host = server_host
 
-        # Clients database path
-        ConfigLoader.__appsettings.security.enabled = (
-            os.getenv(
-                "FLOUDS_CLIENTS_DB",
-                str(ConfigLoader.__appsettings.security.enabled),
-            ).lower()
-            == "true"
-        )
+        # Debug mode: accept '1','true','yes' (case-insensitive)
+        debug_val = os.getenv("APP_DEBUG_MODE")
+        if debug_val is not None:
+            ConfigLoader.__appsettings.app.debug = str(debug_val).lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+
+        # Security flag
+        sec_enabled = os.getenv("FLOUDS_SECURITY_ENABLED")
+        if sec_enabled is not None:
+            ConfigLoader.__appsettings.security.enabled = str(sec_enabled).lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+
+        # Clients DB path
+        clients_db = os.getenv("FLOUDS_CLIENTS_DB")
+        if clients_db:
+            ConfigLoader.__appsettings.security.clients_db_path = clients_db
+
+        # CORS/trusted-hosts are seeded from env at startup (see app/main.py).
+        # DB is the canonical runtime source; environment variables are used
+        # only for bootstrapping or emergency override via
+        # `FLOUDS_CONFIG_OVERRIDE`.
+
+        # VectorDB settings
+        v_container = os.getenv("VECTORDB_CONTAINER_NAME")
+        if v_container:
+            ConfigLoader.__appsettings.vectordb.container_name = v_container
+
+        v_port = os.getenv("VECTORDB_PORT")
+        if v_port is not None:
+            try:
+                ConfigLoader.__appsettings.vectordb.port = int(v_port)
+            except ValueError:
+                logger.warning(f"Invalid VECTORDB_PORT: {v_port}; using config value")
+
+        v_user = os.getenv("VECTORDB_USERNAME")
+        if v_user is not None:
+            ConfigLoader.__appsettings.vectordb.username = v_user
+
+        # Password can come from direct env or a path/filename pointing into the secrets dir
+        v_password = os.getenv("VECTORDB_PASSWORD")
+        if v_password is not None:
+            ConfigLoader.__appsettings.vectordb.password = v_password
+
+        # Password file: only support VECTORDB_PASSWORD_FILE (full path or filename)
+        v_pass_file = os.getenv("VECTORDB_PASSWORD_FILE")
+        if v_pass_file:
+            # If a relative filename was provided, replace only the filename portion of the default path
+            if os.path.isabs(v_pass_file):
+                ConfigLoader.__appsettings.vectordb.password_file = v_pass_file
+            else:
+                default_dir = os.path.dirname(
+                    ConfigLoader.__appsettings.vectordb.password_file
+                )
+                ConfigLoader.__appsettings.vectordb.password_file = os.path.join(
+                    default_dir, v_pass_file
+                )
 
         logger.info(f"Loaded app settings for environment: {env}")
         return ConfigLoader.__appsettings

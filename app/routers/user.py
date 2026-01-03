@@ -5,11 +5,13 @@
 # =============================================================================
 
 import asyncio
+from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
 from app.dependencies.auth import get_db_token
 from app.logger import get_logger
+from app.models.base_response import BaseResponse
 from app.models.list_response import ListResponse
 from app.models.reset_password_request import ResetPasswordRequest
 from app.models.reset_password_response import ResetPasswordResponse
@@ -22,7 +24,7 @@ router = APIRouter()
 logger = get_logger("router")
 
 
-def log_response(response, operation: str) -> None:
+def log_response(response: BaseResponse, operation: str) -> None:
     """
     Logs the response for a given operation.
 
@@ -44,7 +46,6 @@ def log_response(response, operation: str) -> None:
 @router.post("/set_user", response_model=ListResponse)
 async def set_user(
     request: SetUserRequest,
-    http_request: Request,
     db_secret: str = Depends(get_db_token),
 ) -> ListResponse:
     """
@@ -53,8 +54,6 @@ async def set_user(
 
     Args:
         request (SetUserRequest): The request object containing tenant and token info.
-        http_request (Request): FastAPI request to access authenticated client info.
-
     Returns:
         ListResponse: The response with operation details.
     """
@@ -62,7 +61,9 @@ async def set_user(
         f"set_user request for tenant: {sanitize_for_log(request.tenant_code)}"
     )
 
-    extra_fields = CommonUtils.parse_extra_fields(request, SetUserRequest)
+    extra_fields: Dict[str, Any] = CommonUtils.parse_extra_fields(
+        request, SetUserRequest
+    )
     response: ListResponse = await asyncio.to_thread(
         VectorStoreService.set_user,
         request,
@@ -76,7 +77,6 @@ async def set_user(
 @router.post("/reset_password", response_model=ResetPasswordResponse)
 async def reset_password(
     request: ResetPasswordRequest,
-    http_request: Request,
     db_secret: str = Depends(get_db_token),
 ) -> ResetPasswordResponse:
     """
@@ -85,8 +85,6 @@ async def reset_password(
 
     Args:
         request (ResetPasswordRequest): The request object containing tenant and token info.
-        http_request (Request): FastAPI request to access authenticated client info.
-
     Returns:
         ResetPasswordResponse: The response with operation details.
     """
@@ -94,7 +92,9 @@ async def reset_password(
         f"reset_password request for tenant: {sanitize_for_log(request.tenant_code)}"
     )
 
-    extra_fields = CommonUtils.parse_extra_fields(request, ResetPasswordRequest)
+    extra_fields: Dict[str, Any] = CommonUtils.parse_extra_fields(
+        request, ResetPasswordRequest
+    )
     response: ResetPasswordResponse = await asyncio.to_thread(
         VectorStoreService.reset_password,
         request,

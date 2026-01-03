@@ -228,6 +228,26 @@ else {
     Write-Success "Using environment file: $EnvFile"
     (Get-Content $EnvFile) -join "`n" | Set-Content $EnvFile -NoNewline
     $envVars = Read-EnvFile -FilePath $EnvFile
+
+    # Parsed .env variables (keys only) — print keys for visibility, do not set process envs here.
+    if ($envVars.Keys.Count -gt 0) {
+        Write-Host "Parsed environment variables:" -ForegroundColor Gray
+        foreach ($key in $envVars.Keys) {
+            $val = $envVars[$key]
+            # Mask likely secrets for safety when printing
+            if ($key -match '(?i)PASSWORD|SECRET|KEY|TOKEN') {
+                if ($val) {
+                    Write-Host "$key=<masked length=$($val.Length)>" -ForegroundColor Gray
+                }
+                else {
+                    Write-Host "$key=<empty>" -ForegroundColor Gray
+                }
+            }
+            else {
+                Write-Host "$key=$val" -ForegroundColor Gray
+            }
+        }
+    }
 }
 
 # Require FLOUDS_DATA_PATH_AT_HOST to be set for host data mapping
@@ -245,7 +265,7 @@ if (-not ($envVars.ContainsKey("FLOUDS_SECRET_PATH_AT_HOST") -and $envVars["FLOU
 # Set defaults for required variables
 $floudsVectorNetwork = "flouds_vector_network"
 $milvusNetwork = if ($envVars.ContainsKey("VECTORDB_NETWORK")) { $envVars["VECTORDB_NETWORK"] } else { "milvus_network" }
-$milvusContainerName = if ($envVars.ContainsKey("VECTORDB_ENDPOINT")) { $envVars["VECTORDB_ENDPOINT"] } else { "milvus-standalone" }
+$milvusContainerName = if ($envVars.ContainsKey("VECTORDB_CONTAINER_NAME")) { $envVars["VECTORDB_CONTAINER_NAME"] } else { "milvus-standalone" }
 $workingDir = "/flouds-vector"
 $containerLogPath = "$workingDir/logs"
 $dockerDataPath = "$workingDir/data"

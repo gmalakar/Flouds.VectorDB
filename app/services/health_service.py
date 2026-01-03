@@ -6,6 +6,7 @@
 
 from datetime import datetime
 from time import time
+from typing import Any, cast
 
 import psutil
 
@@ -83,21 +84,44 @@ class HealthService:
             tuple[str, dict]: (status, details) for Milvus connection.
         """
         details = {
-            "endpoint": APP_SETTINGS.vectordb.endpoint,
+            "container_name": APP_SETTINGS.vectordb.container_name,
             "port": APP_SETTINGS.vectordb.port,
         }
 
         try:
             start_time = time()
-            admin_client = MilvusHelper._BaseMilvus__get_internal_admin_client()
+            # Access the internal admin client via a guarded getattr to avoid
+            # static name-mangling complaints from the type checker.
+            admin_getter = getattr(
+                MilvusHelper, "_BaseMilvus__get_internal_admin_client", None
+            )
+            admin_client = None
+            if callable(admin_getter):
+                try:
+                    admin_client = admin_getter()
+                except Exception as e:
+                    # Record the error in details so tests and diagnostics can see why
+                    # Milvus admin client acquisition failed.
+                    logger.warning(f"Failed to obtain Milvus admin client: {e}")
+                    details.update({"status": "connection_failed", "error": str(e)})
+                    return "unhealthy", details
 
-            if MilvusHelper.check_connection(admin_client):
+            # Cast admin_client to Any when calling helper to satisfy static typing.
+            admin_client_any = cast(Any, admin_client)
+            if admin_client is not None and MilvusHelper.check_connection(
+                admin_client_any
+            ):
                 response_time = time() - start_time
+                try:
+                    dbs = admin_client_any.list_databases()
+                    db_count = len(dbs) if dbs is not None else 0
+                except Exception:
+                    db_count = 0
                 details.update(
                     {
                         "status": "connected",
                         "response_time_ms": round(response_time * 1000, 2),
-                        "databases": len(admin_client.list_databases()),
+                        "databases": db_count,
                     }
                 )
                 return "healthy", details
@@ -176,8 +200,8 @@ class HealthService:
 
         try:
             # Check required settings
-            if not APP_SETTINGS.vectordb.endpoint:
-                issues.append("Missing vectordb endpoint")
+            if not APP_SETTINGS.vectordb.container_name:
+                issues.append("Missing vectordb container name  ")
             if not APP_SETTINGS.vectordb.username:
                 issues.append("Missing vectordb username")
             if (

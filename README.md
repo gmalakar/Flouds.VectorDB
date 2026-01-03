@@ -25,6 +25,11 @@ If you are interested in vector databases, FastAPI, or scalable backend systems,
 - **Configurable via JSON** and environment variables
 - **Thread-safe and scalable** architecture
 
+- **Tenant-scoped config caching:** Runtime caching for tenant-scoped configuration values (for example `cors_origins` and `trusted_hosts`) with automatic invalidation on write/delete operations to ensure changes take effect immediately.
+- **Tenant header enforcement:** Non-public endpoints require the `X-Tenant-Code` header; handlers may omit `tenant_code` in request bodies because the service will resolve tenant context from the header or request state.
+- **Optional tenant_code in requests:** `tenant_code` on base request models is optional and resolved from `X-Tenant-Code` when omitted.
+
+
 ---
 
 ## Project Structure
@@ -36,6 +41,7 @@ app/
   models/           # Pydantic models for requests and responses
   modules/          # Utility modules (e.g., thread-safe dict)
   routers/          # FastAPI routers for API endpoints
+  middleware/       # ASGI/Starlette middlewares (CORS, auth, rate limiting, etc.)
   services/         # Service layer for business logic
   utils/            # Utility functions
   main.py           # FastAPI app entry point
@@ -47,6 +53,23 @@ tests/              # Pytest-based unit tests
 
 ---
 
+Notable services and files:
+
+- `app/services/config_service.py` — stores tenant-scoped configuration values (persisted in the `config_kv` table) and implements an in-memory, thread-safe cache with write-time invalidation.
+- `app/middleware/` — tenant-aware and operational middlewares such as CORS, trusted-host enforcement, authentication/authorization, rate limiting, metrics, and request logging.
+- `app/modules/key_manager.py` — manages client records and encryption of client secrets. KeyManager supports tenant-scoped clients and enforces tenant matching when a tenant is supplied to authentication calls.
+
+Developer snippet: resolving tenant in handlers
+
+```py
+# Example: in a FastAPI route handler using a Pydantic `BaseRequest` subclass
+def set_vector_store(request: Request, body: SetVectorStoreRequest):
+  # resolve tenant from body or X-Tenant-Code header
+  tenant = body.resolve_tenant(request)
+  # proceed with tenant-scoped operation
+```
+
+
 ## Configuration
 
 ### appsettings.json
@@ -57,39 +80,91 @@ You can set server type, host, port, logging, and Milvus options.
 **Example:**
 ```json
 {
-  "app": {
-    "name": "Flouds.VectorDB"
-  },
-  "server": {
-    "host": "0.0.0.0",
-    "port": 19680
-  },
-  "vectordb": {
-    "endpoint": "http://localhost",
-    "port": 19530,
-    "username": "root",
-    "password": "<your_milvus_password>",
-    "default_dimension": 384,
-    "admin_role_name": "flouds_admin_role",
-    "primary_key": "flouds_vector_id",
-    "primary_key_data_type": "VARCHAR",
-    "vector_field_name": "flouds_vector",
-    "index_params": {
-      "nlist": 1024,
-      "metric_type": "COSINE",
-      "index_type": "IVF_FLAT"
+    "app": {
+        "name": "FloudsVectors",
+        "default_executor_workers": 16
+    },
+    "server": {
+        "host": "0.0.0.0",
+        "port": 19680
+    },
+    "vectordb": {
+        "endpoint": "localhost",
+        "port": 19530,
+        "username": "root",
+        "password": "<your_milvus_password>",
+        "password_file": "<path to password file>",
+        "default_dimension": 384,
+        "admin_role_name": "flouds_admin_role",
+        "primary_key": "flouds_vector_id",
+        "primary_key_data_type": "VARCHAR",
+        "vector_field_name": "flouds_vector",
+        "auto_flush_min_batch": 100,
+        "index_params": {
+            "nlist": 256,
+            "metric_type": "COSINE",
+            "index_type": "IVF_FLAT"
+        }
+    },
+    "logging": {
+        "folder": "logs",
+        "app_log_file": "flouds.log"
+    },
+    "security": {
+        "enabled": true,
+        "clients_db_path": "data/clients.db",
+        "cors_origins": [
+            "*"
+        ],
+        "trusted_hosts": [
+            "*"
+        ]
     }
-  },
-  "logging": {
-    "folder": "logs",
-    "app_log_file": "flouds.log"
-  }
 }
 ```
 
 You can override any setting using environment variables or the `.env` file.
 
 ---
+
+### Config storage and caching
+
+- Tenant-scoped configuration entries are persisted in the `config_kv` table and are managed by `app/services/config_service.py`.
+- Certain configuration lists (notably `cors_origins` and `trusted_hosts`) are cached in-memory per-tenant for performance. The cache is invalidated automatically when configurations are added, updated, or deleted, so changes are applied immediately without polling.
+- If you need immediate cross-process refresh in clustered deployments, consider using a distributed cache or publish/subscribe mechanism to notify other instances when config changes occur.
+
+**Trusted Hosts & CORS Patterns**
+
+- `trusted_hosts` and `cors_origins` accept simple patterns to provide flexible matching.
+- Supported pattern formats:
+  - Exact match: `example.com` or `https://app.example.com`
+  - Wildcard: `*.example.com` — matches `example.com` and any subdomain like `api.example.com`.
+  - Full wildcard: `*` — allow all hosts/origins.
+  - Regex: prefix with `re:` and provide a full regular expression (for advanced cases). Example: `re:^(.+\.)?example\\.org$`.
+
+- Notes:
+  - Wildcard patterns support `*` as a glob-like wildcard. A pattern beginning with `*.` will match both the root domain and subdomains (e.g. `*.example.com` matches `example.com` and `api.example.com`).
+  - Regex entries must be valid Python regular expressions and are evaluated with full-match semantics.
+  - CORS origin checks consider both full origin strings (including scheme) and hostnames; configure entries accordingly.
+
+Database schema note
+
+- The `config_kv` table stores tenant-scoped entries. It is modeled as a composite primary key on `(key, tenant_code)` with columns similar to:
+
+```sql
+CREATE TABLE IF NOT EXISTS config_kv (
+  key TEXT NOT NULL,
+  tenant_code TEXT NOT NULL DEFAULT '',
+  value TEXT,
+  encrypted INTEGER DEFAULT 0,
+  PRIMARY KEY (key, tenant_code)
+);
+```
+
+Multi-instance considerations
+
+- Cache is currently in-memory per process. For high-availability or horizontally scaled deployments use a shared cache (Redis, Memcached) or publish/subscribe notifications so other instances can invalidate their local cache on writes.
+
 
 ## Requirements
 
@@ -164,10 +239,13 @@ FLOUDS_API_ENV=Development
 APP_DEBUG_MODE=1
 VECTORDB_USERNAME=root
 VECTORDB_PASSWORD=<your_milvus_password>
-VECTORDB_ENDPOINT=localhost
+VECTORDB_CONTAINER_NAME=localhost
 VECTORDB_PORT=19530
 VECTORDB_NETWORK=milvus_network
+VECTORDB_PASSWORD_FILENAME=<password file name>
 FLOUDS_LOG_PATH=./logs
+FLOUDS_SECURITY_ENABLED=true
+FLOUDS_CLIENTS_DB_FILENAME=clients.db
 ```
 
 - The `.env` file allows you to configure the container without modifying code or the Dockerfile.
@@ -204,6 +282,28 @@ All endpoints are versioned under `/api/v1/` and require authentication via `Aut
 - `GET /api/v1/metrics` - System metrics and performance data
 - `GET /docs` - Interactive API documentation (Swagger UI)
 
+### Config Management API
+
+- **Prefix:** `/api/v1/config`
+- **Purpose:** manage tenant-scoped configuration entries (admin-only). These configuration entries are persisted in the `config_kv` table and are used by runtime middleware for CORS and Trusted Host enforcement.
+- **Endpoints:**
+  - `POST /api/v1/config/add` — create a new config entry. Body fields: `key`, `value`, `tenant_code` (optional; header overrides), `encrypted` (bool).
+  - `GET /api/v1/config/get?key=...&tenant_code=...` — retrieve config meta. Encrypted values return `"value": "<encrypted>"` (the service never returns ciphertext in the API).
+  - `PUT /api/v1/config/update` — update an existing entry. Body must include `key`, `tenant_code`, and `value` (optional `encrypted`).
+  - `DELETE /api/v1/config/delete` — delete an entry by composite PK.
+
+**Notes:**
+- Admin access is required (use `Authorization: Bearer <admin_token>`). Include `X-Tenant-Code` header when appropriate.
+- Example: create a CORS origins entry for tenant `mytenant`:
+
+```sh
+curl -X POST http://localhost:19680/api/v1/config/add \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer admin:admin_password" \
+  -H "X-Tenant-Code: mytenant" \
+  -d '{"key":"cors_origins","value":"[\"https://app.example.com\"]","encrypted":false}'
+```
+
 ---
 
 ## How to Call the API
@@ -224,8 +324,9 @@ curl -X POST http://localhost:19680/api/v1/vector_store/set_vector_store \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer admin:admin_password" \
   -H "Flouds-VectorDB-Token: root|<your_milvus_password>" \
+  -H "X-Tenant-Code: mytenant" \
   -d '{
-    "tenant_code": "mytenant"
+    "tenant_code": "mytenant"  # optional when X-Tenant-Code header is provided
   }'
 ```
 
@@ -255,8 +356,9 @@ curl -X POST http://localhost:19680/api/v1/vector_store/insert \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer user:password" \
   -H "Flouds-VectorDB-Token: user|user_password" \
+  -H "X-Tenant-Code: mytenant" \
   -d '{
-    "tenant_code": "mytenant",
+    "tenant_code": "mytenant",  # optional when X-Tenant-Code header is provided
     "data": [
       {
         "key": "doc_001",
@@ -276,8 +378,9 @@ curl -X POST http://localhost:19680/api/v1/vector_store/search \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer user:password" \
   -H "Flouds-VectorDB-Token: user|user_password" \
+  -H "X-Tenant-Code: mytenant" \
   -d '{
-    "tenant_code": "mytenant",
+    "tenant_code": "mytenant",  # optional when X-Tenant-Code header is provided
     "model": "sentence-transformers",
     "limit": 10,
     "score_threshold": 0.0,
@@ -294,8 +397,9 @@ curl -X POST http://localhost:19680/api/v1/vector_store/search \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer user:password" \
   -H "Flouds-VectorDB-Token: user|user_password" \
+  -H "X-Tenant-Code: mytenant" \
   -d '{
-    "tenant_code": "mytenant",
+    "tenant_code": "mytenant",  # optional when X-Tenant-Code header is provided
     "model": "sentence-transformers",
     "limit": 10,
     "score_threshold": 0.0,
@@ -315,8 +419,9 @@ curl -X POST http://localhost:19680/api/v1/vector_store_users/set_user \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer admin:admin_password" \
   -H "Flouds-VectorDB-Token: root|<your_milvus_password>" \
+  -H "X-Tenant-Code: mytenant" \
   -d '{
-    "tenant_code": "mytenant"
+    "tenant_code": "mytenant"  # optional when X-Tenant-Code header is provided
   }'
 ```
 
@@ -392,7 +497,7 @@ This includes:
 Key configuration options:
 ```bash
 # Milvus Connection
-VECTORDB_ENDPOINT=localhost
+VECTORDB_CONTAINER_NAME=localhost
 VECTORDB_PORT=19530
 VECTORDB_USERNAME=root
 VECTORDB_PASSWORD=<your_milvus_password>
@@ -432,6 +537,11 @@ pytest tests/ --cov=app
 black app/
 isort app/
 ```
+
+Testing notes
+
+- If you run integration tests locally with `TestClient`, the client uses host `testserver` which may be rejected by TrustedHost middleware unless `trusted_hosts` for the tenant includes `testserver`. If you see "Invalid Host header" in tests, seed `trusted_hosts` for the test tenant or set `FLOUDS_TRUSTED_HOSTS="testserver"` when running tests.
+- Some TestClient versions treat `DELETE` requests differently; prefer `client.request("DELETE", "/path", json={...})` in tests when passing a JSON body.
 
 ### Contributing
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and [SECURITY.md](SECURITY.md) for security policies.

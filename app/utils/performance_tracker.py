@@ -5,7 +5,7 @@
 # =============================================================================
 import time
 from contextlib import contextmanager
-from typing import Dict
+from typing import Dict, Optional
 
 from app.logger import get_logger
 
@@ -40,7 +40,7 @@ class PerformanceTracker:
 
             # Log slow operations (> 100ms)
             if elapsed_time > 0.1:
-                logger.debug(f"{operation_name} took {elapsed_time:.3f}s")
+                logger.debug(f"{str(operation_name)} took {elapsed_time:.3f}s")
 
     def get_avg(self, operation_name: str) -> float:
         """
@@ -56,7 +56,7 @@ class PerformanceTracker:
             return 0.0
         return sum(self.metrics[operation_name]) / len(self.metrics[operation_name])
 
-    def reset(self, operation_name: str = None):
+    def reset(self, operation_name: Optional[str] = None):
         """
         Reset metrics for an operation or all operations.
 

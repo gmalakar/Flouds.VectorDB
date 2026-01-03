@@ -8,7 +8,7 @@ import logging
 from functools import lru_cache
 from json import JSONDecodeError, dumps, loads
 from threading import Lock
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from pymilvus import MilvusClient, MilvusException
 
@@ -47,7 +47,7 @@ except ImportError as e:
 # Initialize global BM25 embedder
 if _bm25_available and has_sparse_field:
     try:
-        _bm25_embedder = BM25EmbeddingFunction()
+        _bm25_embedder = cast(Any, BM25EmbeddingFunction)()
         logger.info("BM25 embedder initialized successfully")
     except Exception as e:
         logger.warning(f"Failed to initialize BM25 embedder: {e}")
@@ -177,12 +177,10 @@ class VectorStore(BaseMilvus):
             return [{}] * len(chunks)
 
         try:
-            if (
-                not hasattr(_bm25_embedder, "_is_fitted")
-                or not _bm25_embedder._is_fitted
-            ):
-                _bm25_embedder.fit(chunks)
-            sparse_result = _bm25_embedder.encode_documents(chunks)
+            embedder = _bm25_embedder
+            if not getattr(embedder, "_is_fitted", False):
+                embedder.fit(chunks)
+            sparse_result = embedder.encode_documents(chunks)
             sparse_vectors = [
                 VectorStore._convert_sparse_to_dict(sv) for sv in sparse_result
             ]
@@ -456,10 +454,23 @@ class VectorStore(BaseMilvus):
         if search_results and len(search_results) > 0:
             search_hits = search_results[0]
             for search_hit in search_hits:
-                if score_threshold is not None and search_hit.score < score_threshold:
+                hit: Any = search_hit
+                score = getattr(hit, "score", None)
+                if (
+                    score_threshold is not None
+                    and score is not None
+                    and score < score_threshold
+                ):
                     continue
 
-                chunk_content = search_hit.entity.get("chunk")
+                entity = getattr(hit, "entity", None)
+                if not entity:
+                    continue
+
+                if isinstance(entity, dict):
+                    chunk_content = entity.get("chunk")
+                else:
+                    chunk_content = getattr(entity, "chunk", None)
                 if not chunk_content:
                     continue
 
@@ -479,7 +490,10 @@ class VectorStore(BaseMilvus):
                     ):
                         continue
 
-                chunk_metadata = search_hit.entity.get("meta", "{}")
+                if isinstance(entity, dict):
+                    chunk_metadata = entity.get("meta", "{}")
+                else:
+                    chunk_metadata = getattr(entity, "meta", "{}")
                 if search_request.meta_required:
                     parsed_metadata = self._parse_meta(chunk_metadata)
                     if not parsed_metadata or parsed_metadata == {}:
@@ -606,7 +620,8 @@ class VectorStore(BaseMilvus):
         try:
             if not (_bm25_available and _bm25_embedder and has_sparse_field):
                 return None
-            sparse_result = _bm25_embedder.encode_queries([text_filter])[0]
+            embedder = _bm25_embedder
+            sparse_result = embedder.encode_queries([text_filter])[0]
             if hasattr(sparse_result, "tocoo"):
                 coo = sparse_result.tocoo()
                 return {int(idx): float(val) for idx, val in zip(coo.col, coo.data)}
@@ -642,18 +657,38 @@ class VectorStore(BaseMilvus):
         # Process dense results
         if dense_results and len(dense_results) > 0:
             for rank, hit in enumerate(dense_results[0]):
-                key = hit.entity.get(BaseMilvus._get_primary_key_name())
+                h: Any = hit
+                entity = getattr(h, "entity", None)
+                if isinstance(entity, dict):
+                    key = entity.get(BaseMilvus._get_primary_key_name())
+                else:
+                    key = (
+                        getattr(entity, BaseMilvus._get_primary_key_name(), None)
+                        if entity is not None
+                        else None
+                    )
                 if key:
-                    dense_scores[key] = (rank + 1, hit.score)
-                    all_items[key] = hit
+                    score = getattr(h, "score", None)
+                    dense_scores[key] = (rank + 1, score)
+                    all_items[key] = h
 
         # Process sparse results
         if sparse_results and len(sparse_results) > 0:
             for rank, hit in enumerate(sparse_results[0]):
-                key = hit.entity.get(BaseMilvus._get_primary_key_name())
+                h: Any = hit
+                entity = getattr(h, "entity", None)
+                if isinstance(entity, dict):
+                    key = entity.get(BaseMilvus._get_primary_key_name())
+                else:
+                    key = (
+                        getattr(entity, BaseMilvus._get_primary_key_name(), None)
+                        if entity is not None
+                        else None
+                    )
                 if key:
-                    sparse_scores[key] = (rank + 1, hit.score)
-                    all_items[key] = hit
+                    score = getattr(h, "score", None)
+                    sparse_scores[key] = (rank + 1, score)
+                    all_items[key] = h
 
         # Apply RRF scoring
         rrf_scores = self._calculate_rrf_scores(dense_scores, sparse_scores)
@@ -667,19 +702,29 @@ class VectorStore(BaseMilvus):
 
         for key, _ in sorted_items:
             search_hit = all_items[key]
+            h: Any = search_hit
 
             # Apply score threshold to original dense score if available
             if score_threshold is not None and key in dense_scores:
-                if dense_scores[key][1] < score_threshold:
+                ds_score = dense_scores[key][1]
+                if ds_score is not None and ds_score < score_threshold:
                     continue
 
-            chunk_content = search_hit.entity.get("chunk")
+            entity = getattr(h, "entity", None)
+            if isinstance(entity, dict):
+                chunk_content = entity.get("chunk")
+            else:
+                chunk_content = (
+                    getattr(entity, "chunk", None) if entity is not None else None
+                )
             if not chunk_content:
                 continue
 
-            chunk_metadata = self._process_meta(
-                search_hit.entity.get("meta", "{}"), search_request
-            )
+            if isinstance(entity, dict):
+                meta_val = entity.get("meta", "{}")
+            else:
+                meta_val = getattr(entity, "meta", "{}")
+            chunk_metadata = self._process_meta(meta_val, search_request)
             if chunk_metadata is None:
                 continue
 

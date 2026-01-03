@@ -5,6 +5,8 @@
 # =============================================================================
 
 
+from typing import Optional
+
 from pydantic import Field
 
 from app.models.base_response import BaseResponse
@@ -20,7 +22,7 @@ class ResetPasswordResponse(BaseResponse):
         reset_flag (bool): Indicates whether the password reset was successful.
     """
 
-    user_name: str = Field(
+    user_name: Optional[str] = Field(
         None,
         description="The username of the user requesting the password reset. This field is required.",
     )

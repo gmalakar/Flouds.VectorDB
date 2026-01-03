@@ -9,6 +9,7 @@ import uuid
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from app.exceptions.custom_exceptions import FloudsVectorError
 from app.logger import get_logger
@@ -24,7 +25,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
     Catches and processes exceptions, returning standardized JSON error responses.
     """
 
-    async def dispatch(self, request: Request, call_next) -> JSONResponse:
+    async def dispatch(self, request: Request, call_next) -> Response:
         """
         Intercept requests and handle exceptions, returning formatted JSON error responses.
 
@@ -48,11 +49,11 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
         except HTTPException as e:
             sanitized_error = sanitize_error_message(str(e.detail))
             detail_dict = e.detail if isinstance(e.detail, dict) else None
-            message = (
-                detail_dict.get("message")
-                if detail_dict and isinstance(detail_dict, dict)
-                else str(e.detail)
-            )
+            # Ensure message is a string for formatting
+            if detail_dict and isinstance(detail_dict, dict):
+                message = str(detail_dict.get("message") or str(e.detail))
+            else:
+                message = str(e.detail)
             additional_info = None
             error_type = "HTTP Error"
             if detail_dict:
@@ -63,7 +64,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
                     if k not in {"error", "message", "type"}
                 }
                 if detail_dict.get("type"):
-                    additional_info["type"] = detail_dict["type"]
+                    additional_info["type"] = detail_dict.get("type")
 
             return JSONResponse(
                 status_code=e.status_code,

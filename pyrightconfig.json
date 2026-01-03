@@ -1,0 +1,19 @@
+{
+    "venvPath": "./",
+    "venv": ".venv",
+    "pythonVersion": "3.12",
+    "typeCheckingMode": "basic",
+    "reportMissingImports": false,
+    "reportOptionalMemberAccess": true,
+    "exclude": [
+        "tools/**",
+        "magicmock/**",
+        "milvus/**",
+        "docs/**",
+        ".vs/**",
+        ".env/**",
+        "docs/**",
+        "data/**",
+        "tests/**/data/**"
+    ]
+}

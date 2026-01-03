@@ -3,9 +3,12 @@
 # Date: 2025-01-27
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
+from typing import Awaitable, Callable, Dict
+
 from fastapi import Header, HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp
 
 from app.app_init import APP_SETTINGS
 from app.logger import get_logger
@@ -15,6 +18,21 @@ from app.utils.log_sanitizer import sanitize_for_log
 from app.utils.performance_tracker import perf_tracker
 
 logger = get_logger("auth")
+
+
+def common_headers(
+    tenant_code: str = Header(
+        "", alias="X-Tenant-Code", description="Tenant code for request"
+    ),
+) -> Dict[str, str]:
+    """Dependency that declares common headers used across endpoints.
+
+    This is used for documentation purposes (OpenAPI) so routes show the
+    `X-Tenant-Code` header input box in the UI. Authorization is exposed via
+    the global HTTPBearer security scheme (the Authorize button) rather than
+    a per-endpoint header input to avoid duplication in the docs.
+    """
+    return {"tenant_code": tenant_code}
 
 
 def get_db_token(
@@ -38,7 +56,7 @@ def get_db_token(
 class AuthMiddleware(BaseHTTPMiddleware):
     """API Key authentication middleware for Bearer token validation."""
 
-    def __init__(self, app):
+    def __init__(self, app: ASGIApp):
         super().__init__(app)
         self.enabled = APP_SETTINGS.security.enabled
 
@@ -83,23 +101,50 @@ class AuthMiddleware(BaseHTTPMiddleware):
         else:
             logger.info("API authentication disabled")
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         """Process request with API key authentication."""
 
-        # Early exit for disabled auth
-        if not self.enabled:
-            return await call_next(request)
+        # Determine if authentication checks should be skipped, but still
+        # enforce tenant header presence for non-public endpoints.
+        skip_auth = not self.enabled
 
         # Skip auth for public endpoints (optimized lookup)
         path = request.url.path
+        # Allow both API-prefixed health endpoints and root-level /health to bypass auth
         if path in self.public_endpoints or path.startswith("/api/v1/health/"):
+            return await call_next(request)
+
+        # Require tenant header for all non-public endpoints
+        tenant_header = request.headers.get("X-Tenant-Code")
+        if not tenant_header:
+            error_response = BaseResponse(
+                success=False,
+                message="Missing X-Tenant-Code header",
+                tenant_code=None,
+                time_taken=0.0,
+                results=None,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content=error_response.model_dump(),
+            )
+
+        # If authentication is disabled, populate request.state and continue.
+        if skip_auth:
+            request.state.tenant_code = tenant_header
             return await call_next(request)
 
         # Check if keys are configured (cached check)
         if not self._keys_configured:
             logger.error("Authentication enabled but no API keys configured")
             error_response = BaseResponse(
-                success=False, message="Authentication misconfigured", model="auth"
+                success=False,
+                message="Authentication misconfigured",
+                tenant_code=None,
+                time_taken=0.0,
+                results=None,
             )
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -121,16 +166,19 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 success=False,
                 message="Missing Authorization header"
                 + (" or token parameter" if not APP_SETTINGS.app.is_production else ""),
-                model="auth",
+                tenant_code=None,
+                time_taken=0.0,
+                results=None,
             )
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content=error_response.model_dump(),
             )
 
-        # Authenticate client with performance tracking
+        # Use tenant header (required above) when authenticating
+        tenant_code = tenant_header or ""
         with perf_tracker.track("auth_client_lookup"):
-            client = key_manager.authenticate_client(token)
+            client = key_manager.authenticate_client(token, tenant_code=tenant_code)
 
         if not client:
             # Avoid logging raw tokens or secrets. Log only masked client id.
@@ -150,7 +198,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 "Authentication failed for API token: %s", sanitize_for_log(masked)
             )
             error_response = BaseResponse(
-                success=False, message="Invalid API token", model="auth"
+                success=False,
+                message="Invalid API token",
+                tenant_code=None,
+                time_taken=0.0,
+                results=None,
             )
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -160,6 +212,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Store client info in request state for downstream use
         request.state.client_id = client.client_id
         request.state.client_type = client.client_type
+        # Record tenant for downstream handlers
+        request.state.tenant_code = tenant_code or getattr(client, "tenant_code", "")
 
         logger.debug(
             f"Client authenticated: {sanitize_for_log(client.client_id)} ({client.client_type})"

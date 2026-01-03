@@ -35,8 +35,10 @@ class ValidationMiddleware(BaseHTTPMiddleware):
         if hasattr(request, "headers") and "content-length" in request.headers:
             content_length = int(request.headers.get("content-length", 0))
             if content_length > 10 * 1024 * 1024:  # 10MB limit
+                client = getattr(request, "client", None)
+                client_host = client.host if client is not None else ""
                 logger.warning(
-                    f"Request too large: {content_length} bytes from {sanitize_for_log(request.client.host)}"
+                    f"Request too large: {content_length} bytes from {sanitize_for_log(client_host)}"
                 )
                 raise HTTPException(status_code=413, detail="Request entity too large")
 

@@ -4,6 +4,8 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 
+from typing import Any, Dict, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -25,10 +27,14 @@ class BaseResponse(BaseModel):
         "Operation completed successfully.",
         description="A message providing additional information about the operation.",
     )
-    tenant_code: str = Field(
+    tenant_code: Optional[str] = Field(
         None,
         description="The tenant for which the operation was performed. If not specified, the operation is for the default tenant.",
     )
     time_taken: float = Field(
         0.0, description="The time taken to complete the operation in seconds."
+    )
+    results: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Optional field that can contain operation-specific results (e.g., a dict of string keys to values).",
     )

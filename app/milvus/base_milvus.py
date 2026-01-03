@@ -12,9 +12,9 @@ import random
 import re
 import string
 from base64 import urlsafe_b64encode
-from os import environ, getenv, urandom
+from os import environ, urandom
 from threading import Lock
-from typing import Any, List, Optional
+from typing import Any, List, Optional, cast
 from uuid import uuid4
 
 from pymilvus import (
@@ -35,6 +35,7 @@ from app.exceptions.custom_exceptions import (
     MilvusOperationError,
     TenantError,
     UserManagementError,
+    ValidationError,
     VectorStoreError,
 )
 from app.logger import get_logger
@@ -121,7 +122,8 @@ class BaseMilvus:
         Raises:
             ConfigurationError: If username or password is missing or invalid
         """
-        username = getenv("VECTORDB_USERNAME") or APP_SETTINGS.vectordb.username
+        # Prefer values from the centralized AppSettings (no runtime env overrides).
+        username = APP_SETTINGS.vectordb.username
         if not username or username.strip() == "":
             raise ConfigurationError(
                 "vectordb.username is missing! Set VECTORDB_USERNAME env or in your config."
@@ -147,16 +149,34 @@ class BaseMilvus:
         Returns:
             Optional[str]: Password if found, None otherwise
         """
-        password_file = (
-            getenv("VECTORDB_PASSWORD_FILE") or APP_SETTINGS.vectordb.password_file
-        )
+        # Use configured password file first, then configured password value.
+        password_file = APP_SETTINGS.vectordb.password_file
 
         if password_file:
             password = cls._read_password_file(password_file)
             if password:
+                try:
+                    masked_path = sanitize_for_log(password_file)
+                except Exception:
+                    masked_path = "(password_file)"
+                try:
+                    plen = len(password)
+                except Exception:
+                    plen = None
+                logger.info(
+                    f"Loaded Milvus password from file {masked_path} (length={plen})"
+                )
                 return password
+            else:
+                try:
+                    masked_path = sanitize_for_log(password_file)
+                except Exception:
+                    masked_path = "(password_file)"
+                logger.warning(
+                    f"Configured password file {masked_path} was not readable or was empty; falling back to configured password value if present."
+                )
 
-        return getenv("VECTORDB_PASSWORD") or APP_SETTINGS.vectordb.password
+        return APP_SETTINGS.vectordb.password
 
     @classmethod
     def _read_password_file(cls, password_file: str) -> Optional[str]:
@@ -178,7 +198,13 @@ class BaseMilvus:
                 with open(safe_password_file, "r") as file:
                     password = file.read().strip()
                 if password:
-                    logger.debug("Password successfully read from file")
+                    try:
+                        masked_path = sanitize_for_log(safe_password_file)
+                    except Exception:
+                        masked_path = "(password_file)"
+                    logger.debug(
+                        f"Password successfully read from file {masked_path} (length={len(password)})"
+                    )
                     return password
                 else:
                     logger.warning(f"Password file {password_file} is empty")
@@ -189,18 +215,19 @@ class BaseMilvus:
     @classmethod
     def _configure_endpoint(cls) -> None:
         """Configure Milvus endpoint from environment or settings."""
-        endpoint = getenv("VECTORDB_ENDPOINT") or APP_SETTINGS.vectordb.endpoint
+        # Use centralized configuration; do not read runtime environment variables here.
+        container_name = APP_SETTINGS.vectordb.container_name
 
         # Add protocol if missing
-        if not re.match(r"^https?://", endpoint):
-            endpoint = f"http://{endpoint}"
+        if not re.match(r"^https?://", container_name):
+            container_name = f"http://{container_name}"
 
         if (
-            endpoint
-            and isinstance(endpoint, str)
-            and re.match(r"^https?://|^[\w\.-]+$", endpoint)
+            container_name
+            and isinstance(container_name, str)
+            and re.match(r"^https?://|^[\w\.-]+$", container_name)
         ):
-            cls.__milvus_endpoint = endpoint
+            cls.__milvus_endpoint = container_name
         else:
             raise ConfigurationError(
                 "vectordb.endpoint is invalid! Must be a valid URL or hostname."
@@ -210,7 +237,7 @@ class BaseMilvus:
     def _configure_port(cls) -> None:
         """Configure Milvus port from environment or settings."""
         try:
-            port = int(getenv("VECTORDB_PORT") or APP_SETTINGS.vectordb.port)
+            port = int(APP_SETTINGS.vectordb.port)
         except Exception:
             port = 19530
 
@@ -256,13 +283,14 @@ class BaseMilvus:
             msg = str(ex)
             if "UNAUTHENTICATED" in msg or "auth check failure" in msg.lower():
                 # Determine where password likely came from
+                # We no longer allow runtime overrides; report the configured source.
                 pw_source = "config"
-                if os.getenv("VECTORDB_PASSWORD"):
-                    pw_source = "environment variable VECTORDB_PASSWORD"
-                elif os.getenv("VECTORDB_PASSWORD_FILE") or getattr(
-                    APP_SETTINGS.vectordb, "password_file", None
-                ):
-                    pw_source = "password file (VECTORDB_PASSWORD_FILE or config)"
+                if getattr(APP_SETTINGS.vectordb, "password", None):
+                    pw_source = "configured password (APP_SETTINGS.vectordb.password)"
+                elif getattr(APP_SETTINGS.vectordb, "password_file", None):
+                    pw_source = (
+                        "configured password file (APP_SETTINGS.vectordb.password_file)"
+                    )
 
                 logger.error(
                     "Milvus reported authentication failure (UNAUTHENTICATED). "
@@ -329,6 +357,7 @@ class BaseMilvus:
         Ensures the admin role exists and has all necessary privileges.
         Returns True if created, False if already existed.
         """
+        new = False
         try:
             new = BaseMilvus._create_role_if_not_exists(
                 APP_SETTINGS.vectordb.admin_role_name
@@ -342,20 +371,30 @@ class BaseMilvus:
                     role_name=APP_SETTINGS.vectordb.admin_role_name,
                 )
                 # This gives full access across all collections and databases.
-                BaseMilvus.__get_internal_admin_client().grant_privilege(
+                _admin_client = BaseMilvus.__get_internal_admin_client()
+                if _admin_client is None:
+                    raise MilvusConnectionError("Milvus admin client not initialized")
+                _admin_client.grant_privilege(
                     role_name=APP_SETTINGS.vectordb.admin_role_name,
                     object_type="Global",
                     privilege="*",
                     object_name="*",
                 )
-            BaseMilvus.__get_internal_admin_client().grant_privilege_v2(
+
+            _admin_client = BaseMilvus.__get_internal_admin_client()
+            if _admin_client is None:
+                raise MilvusConnectionError("Milvus admin client not initialized")
+            _admin_client.grant_privilege_v2(
                 role_name=APP_SETTINGS.vectordb.admin_role_name,
                 privilege="SelectOwnership",
                 collection_name="*",
                 db_name="default",
             )
 
-            BaseMilvus.__get_internal_admin_client().grant_privilege_v2(
+            _admin_client = BaseMilvus.__get_internal_admin_client()
+            if _admin_client is None:
+                raise MilvusConnectionError("Milvus admin client not initialized")
+            _admin_client.grant_privilege_v2(
                 role_name="admin",
                 privilege="SelectOwnership",
                 collection_name="*",
@@ -368,6 +407,8 @@ class BaseMilvus:
         except Exception as ex:
             logger.error(f"Unexpected error setting up admin role: {ex}")
             raise MilvusOperationError(f"Error setting up Milvus admin role: {ex}")
+
+        return new
 
     @staticmethod
     def _create_role_if_not_exists(role_name: str) -> bool:
@@ -412,7 +453,7 @@ class BaseMilvus:
             cls.__admin_pwd_reset = False
         else:
             logger.debug(f"Initialized: Milvus admin client already exists")
-        return cls.__minvus_admin_client
+        return cast(MilvusClient, cls.__minvus_admin_client)
 
     @classmethod
     def _get_collection_schema_name(cls) -> str:
@@ -470,10 +511,12 @@ class BaseMilvus:
         return f"{BaseMilvus.__COLLECTION_SCHEMA_NAME}_for_{validated_code}_{safe_model_name}".lower()
 
     @staticmethod
-    def _check_database_exists(tenant_code: str) -> bool:
+    def _check_database_exists(tenant_code: Optional[str]) -> bool:
         """
         Checks if the database for the given tenant exists.
         """
+        if not tenant_code:
+            return False
         try:
             db_name = BaseMilvus._get_db_name_by_tenant_code(tenant_code)
             admin_client = BaseMilvus.__get_internal_admin_client()
@@ -486,10 +529,12 @@ class BaseMilvus:
             return False
 
     @staticmethod
-    def _check_collection_exists(tenant_code: str, model_name: str) -> bool:
+    def _check_collection_exists(tenant_code: Optional[str], model_name: str) -> bool:
         """
         Checks if the collection for the given tenant and model exists.
         """
+        if not tenant_code:
+            return False
         try:
             if not BaseMilvus._check_database_exists(tenant_code):
                 return False
@@ -594,7 +639,7 @@ class BaseMilvus:
 
     @staticmethod
     def _create_user_for_tenant(
-        tenant_code: str, reset_user: bool, **kwargs: Any
+        tenant_code: "Optional[str]", reset_user: bool, **kwargs: Any
     ) -> dict:
         """
         Creates a user for the tenant if it does not exist, or resets if requested.
@@ -608,6 +653,9 @@ class BaseMilvus:
             "existing_user": False,
             "message": "",
         }
+        if not tenant_code:
+            raise ValidationError("tenant_code is required")
+
         admin_client = BaseMilvus.__get_internal_admin_client()
         current_user = BaseMilvus._get_current_user_of_a_tenant(tenant_code)
 
@@ -712,6 +760,9 @@ class BaseMilvus:
             success=False,
             message="",
             reset_flag=False,
+            tenant_code=None,
+            time_taken=0.0,
+            results={},
         )
 
         # Validate password policy
@@ -1272,17 +1323,6 @@ class BaseMilvus:
         logger.info(f"Custom index {BaseMilvus.__VECTOR_INDEX_NAME} created.")
 
     @staticmethod
-    def _grant_collection_permissions(tenant_code: str, collection_name: str) -> None:
-        """Grant collection permissions to tenant role."""
-        role_name = BaseMilvus._get_tenant_role_name_by_tenant_code(tenant_code)
-        BaseMilvus._grant_tenant_privileges_to_collection_if_not_exists(
-            tenant_code=tenant_code, object_name=collection_name, role_name=role_name
-        )
-        logger.info(
-            f"Granted permissions on collection '{collection_name}' to role '{role_name}'."
-        )
-
-    @staticmethod
     def _create_sparse_index(
         db_admin_client: MilvusClient,
         collection_name: str,
@@ -1372,7 +1412,7 @@ class BaseMilvus:
             raise MilvusOperationError(f"Failed to grant privileges: {e}")
 
     @staticmethod
-    def check_connection(client: MilvusClient) -> bool:
+    def check_connection(client: Optional[MilvusClient]) -> bool:
         """
         Verify Milvus client connection health by attempting to list collections.
 

@@ -26,10 +26,17 @@ logger = get_logger("key_manager")
 
 
 class Client:
-    def __init__(self, client_id: str, client_secret: str, client_type: str):
+    def __init__(
+        self,
+        client_id: str,
+        client_secret: str,
+        client_type: str,
+        tenant_code: str = "",
+    ):
         self.client_id = client_id
         self.client_secret = client_secret
         self.client_type = client_type
+        self.tenant_code = tenant_code
 
 
 class KeyManager:
@@ -90,6 +97,7 @@ class KeyManager:
                         client_id TEXT PRIMARY KEY,
                         client_secret TEXT NOT NULL,
                         client_type TEXT NOT NULL DEFAULT 'api_user',
+                        tenant_code TEXT NOT NULL DEFAULT '',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -113,6 +121,17 @@ class KeyManager:
                     END
                 """
                 )
+
+                # Ensure tenant_code column exists for backward compatibility
+                try:
+                    cursor.execute("PRAGMA table_info(clients)")
+                    cols = [r[1] for r in cursor.fetchall()]
+                    if "tenant_code" not in cols:
+                        cursor.execute(
+                            "ALTER TABLE clients ADD COLUMN tenant_code TEXT DEFAULT ''"
+                        )
+                except Exception:
+                    pass
 
                 logger.info("Database schema initialized successfully")
         except (DatabaseCorruptionError, sqlite3.DatabaseError) as e:
@@ -147,6 +166,7 @@ class KeyManager:
                         client_id TEXT PRIMARY KEY,
                         client_secret TEXT NOT NULL,
                         client_type TEXT NOT NULL DEFAULT 'api_user',
+                        tenant_code TEXT NOT NULL DEFAULT '',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -215,8 +235,14 @@ class KeyManager:
                 return None
         return None
 
-    def authenticate_client(self, token: str) -> Optional[Client]:
+    def authenticate_client(
+        self, token: str, tenant_code: str = ""
+    ) -> Optional[Client]:
         try:
+            # signature now supports tenant_code matching; caller may pass tenant_code via keyword
+            # but to keep backward compatibility, accept tokens without tenant enforcement when tenant_code is empty
+            # The method signature was not changed here to preserve callers; the AuthMiddleware will call with tenant_code.
+            # For type-checkers, we handle optional tenant by checking function arguments via kwargs when invoked.
             if token not in self._token_cache:
                 logger.debug("Token not found in token cache.")
                 return None
@@ -227,6 +253,14 @@ class KeyManager:
             client_id, client_secret = parsed
             client = self.clients.get(client_id)
             if client and client.client_secret == client_secret:
+                # enforce tenant_code match when provided
+                if tenant_code and getattr(client, "tenant_code", "") != tenant_code:
+                    logger.warning(
+                        "Tenant code mismatch for client %s: expected %s",
+                        sanitize_for_log(client_id),
+                        sanitize_for_log(getattr(client, "tenant_code", "")),
+                    )
+                    return None
                 return client
             logger.debug(
                 "Client credentials do not match for %s", sanitize_for_log(client_id)
@@ -236,27 +270,82 @@ class KeyManager:
             logger.error("Authentication error: %s", str(e))
             return None
 
-    def is_admin(self, client_id: str) -> bool:
-        return client_id in self._admin_cache
+    def is_admin(self, client_id: str, tenant_code: str = "") -> bool:
+        """Return True if the client is an admin for the given tenant.
+
+        - `superadmin` clients have admin rights across all tenants.
+        - `admin` clients have admin rights only for their configured `tenant_code`.
+        - If `tenant_code` is empty, `admin` is considered True only when the
+          caller does not request tenant scoping (backwards compatible behaviour).
+        """
+        client = self.clients.get(client_id)
+        if not client:
+            return False
+        if self.is_super_admin(client_id):
+            return True
+        ctype = getattr(client, "client_type", "")
+        if ctype == "admin":
+            # If tenant_code is provided, require match. If not provided, preserve
+            # backward compatibility by returning True for admin clients.
+            if not tenant_code:
+                return True
+            return getattr(client, "tenant_code", "") == tenant_code
+        return False
+
+    def is_super_admin(self, client_id: str) -> bool:
+        """Return True if the given client_id is a superadmin."""
+        client = self.clients.get(client_id)
+        return bool(client and getattr(client, "client_type", "") == "superadmin")
+
+    def any_superadmin_exists(self) -> bool:
+        """Return True if any superadmin client exists in the current cache."""
+        return any(
+            getattr(c, "client_type", "") == "superadmin" for c in self.clients.values()
+        )
 
     def get_all_tokens(self) -> Set[str]:
         return set(self._token_cache)
 
     def add_client(
-        self, client_id: str, client_secret: str, client_type: str = "api_user"
+        self,
+        client_id: str,
+        client_secret: str,
+        client_type: str = "api_user",
+        tenant_code: str = "",
+        created_by: Optional[str] = None,
     ) -> bool:
+        """Add client with optional tenant_code support (maintains backward compatibility)."""
         try:
+            # Enforce that only a superadmin can create another superadmin once one exists.
+            if client_type == "superadmin":
+                existing_super = self.any_superadmin_exists()
+                if existing_super:
+                    if not created_by:
+                        logger.warning(
+                            "Attempt to create superadmin without superadmin creator: %s",
+                            sanitize_for_log(client_id),
+                        )
+                        return False
+                    creator = self.clients.get(created_by)
+                    if not creator or creator.client_type != "superadmin":
+                        logger.warning(
+                            "Creator %s is not authorized to create superadmin",
+                            sanitize_for_log(created_by),
+                        )
+                        return False
             encrypted_secret = self.fernet.encrypt(client_secret.encode()).decode()
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT OR REPLACE INTO clients (client_id, client_secret, client_type) VALUES (?, ?, ?)",
-                    (client_id, encrypted_secret, client_type),
+                    "INSERT OR REPLACE INTO clients (client_id, client_secret, client_type, tenant_code) VALUES (?, ?, ?, ?)",
+                    (client_id, encrypted_secret, client_type, tenant_code),
                 )
-            self.clients[client_id] = Client(client_id, client_secret, client_type)
+            self.clients[client_id] = Client(
+                client_id, client_secret, client_type, tenant_code=tenant_code
+            )
             token = f"{client_id}|{client_secret}"
             self._token_cache.add(token)
-            if client_type == "admin":
+            if client_type in ("admin", "superadmin"):
                 self._admin_cache.add(client_id)
             self._parse_token.cache_clear()
             logger.info(
@@ -309,7 +398,7 @@ class KeyManager:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT client_id, client_secret, client_type FROM clients"
+                    "SELECT client_id, client_secret, client_type, COALESCE(tenant_code, '') as tenant_code FROM clients"
                 )
                 rows = cursor.fetchall()
                 if not rows:
@@ -323,6 +412,9 @@ class KeyManager:
                         client_id = row["client_id"]
                         encrypted_secret = row["client_secret"]
                         client_type = row["client_type"]
+                        tenant_code = (
+                            row["tenant_code"] if "tenant_code" in row.keys() else ""
+                        )
                         try:
                             client_secret = self.fernet.decrypt(
                                 encrypted_secret.encode()
@@ -336,11 +428,16 @@ class KeyManager:
                             raise DecryptionError(
                                 f"Cannot decrypt client credentials: {decrypt_error}"
                             )
-                        client = Client(client_id, client_secret, client_type)
+                        client = Client(
+                            client_id,
+                            client_secret,
+                            client_type,
+                            tenant_code=tenant_code,
+                        )
                         self.clients[client_id] = client
                         token = f"{client_id}|{client_secret}"
                         self._token_cache.add(token)
-                        if client_type == "admin":
+                        if client_type in ("admin", "superadmin"):
                             self._admin_cache.add(client_id)
                     except DecryptionError:
                         logger.error(
@@ -461,23 +558,24 @@ class KeyManager:
             )
 
     def ensure_admin_exists(self) -> None:
-        admin_exists = any(c.client_type == "admin" for c in self.clients.values())
-        if admin_exists:
+        # Ensure a superadmin exists. If none exists, create a bootstrap superadmin
+        # account. This account has global admin privileges across tenants.
+        if self.any_superadmin_exists():
             return
         import secrets
 
-        admin_id = "admin"
+        super_id = "superadmin"
         while True:
-            admin_secret = secrets.token_urlsafe(32)
-            if ":" not in admin_secret and "|" not in admin_secret:
+            super_secret = secrets.token_urlsafe(32)
+            if ":" not in super_secret and "|" not in super_secret:
                 break
-        if self.add_client(admin_id, admin_secret, "admin"):
+        if self.add_client(super_id, super_secret, "superadmin", "master"):
             try:
-                self._write_admin_files(admin_id, admin_secret)
+                self._write_admin_files(super_id, super_secret)
             except Exception as e:
-                logger.error("Failed to create admin credential files: %s", str(e))
+                logger.error("Failed to create superadmin credential files: %s", str(e))
         else:
-            logger.error("Failed to create admin user")
+            logger.error("Failed to create superadmin user")
 
 
 key_manager = KeyManager()

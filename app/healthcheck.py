@@ -41,7 +41,7 @@ def build_healthcheck_url() -> str:
     # Compose from host/port/path envs to avoid hardcoding
     host = os.getenv("HEALTHCHECK_HOST", os.getenv("SERVER_HOST", "localhost"))
     port = os.getenv("HEALTHCHECK_PORT", os.getenv("SERVER_PORT", "19680"))
-    path = os.getenv("HEALTHCHECK_PATH", "/health")
+    path = os.getenv("HEALTHCHECK_PATH", "/api/v1/health")
 
     # Normalize path
     if not path.startswith("/"):
