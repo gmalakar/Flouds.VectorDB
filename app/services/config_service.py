@@ -4,26 +4,46 @@
 # =============================================================================
 import json
 import os
+import re
 import sqlite3
 import threading
-from typing import List, Optional
+from pathlib import Path
+from typing import IO, Any, Callable, Iterable, List, Optional, Union, cast
 
 from cryptography.fernet import Fernet
 
 from app.app_init import APP_SETTINGS
 from app.logger import get_logger
+from app.utils import path_validator as _path_validator
 from app.utils.log_sanitizer import sanitize_for_log
-from app.utils.path_validator import safe_open
 
 logger = get_logger("config_service")
 
-# Cached Fernet instance
-_FERNET: Optional[Fernet] = None
+# Cached Fernet instance (lowercase to avoid constant-redefinition warnings)
+_fernet: Optional[Fernet] = None
 
 # In-memory cache for tenant-scoped list values (cors_origins, trusted_hosts)
 # Keyed by (config_key, tenant_code) -> List[str]
 _CACHE: dict[tuple[str, str], List[str]] = {}
 _CACHE_LOCK = threading.Lock()
+
+
+# Provide a typed alias for `safe_open` so Pylance can reason about its signature.
+# We only need a reasonably-accurate callable type for the places we use it
+# (open a file path relative to a base dir), so a simple Callable is sufficient.
+# Provide a thin typed wrapper around the real `safe_open` implementation.
+# This gives Pylance a precise signature while delegating to the module
+# implementation at runtime.
+_SafeOpen = Callable[[Union[str, Path], Union[str, Path], str], IO[Any]]
+# Create a typed view of the module implementation so the type checker
+# knows the callable signature (the runtime function remains the original).
+safe_open_impl = cast(_SafeOpen, _path_validator.safe_open)
+
+
+def safe_open_t(
+    file_path: Union[str, Path], base_dir: Union[str, Path], mode: str = "r"
+) -> IO[Any]:
+    return safe_open_impl(file_path, base_dir, mode)
 
 
 def _get_cached_list(key: str, tenant_code: str) -> List[str]:
@@ -65,17 +85,17 @@ def _invalidate_cache_for_key(key: str, tenant_code: Optional[str] = None) -> No
 
 def _get_fernet() -> Optional[Fernet]:
     """Return a Fernet instance, creating/reading a local key file if necessary."""
-    global _FERNET
-    if _FERNET:
-        return _FERNET
+    global _fernet
+    if _fernet:
+        return _fernet
 
     # Prefer explicit env var
     key_env = os.getenv("FLOUDS_ENCRYPTION_KEY")
     if key_env:
         try:
             key = key_env.encode()
-            _FERNET = Fernet(key)
-            return _FERNET
+            _fernet = Fernet(key)
+            return _fernet
         except Exception:
             logger.exception("Invalid FLOUDS_ENCRYPTION_KEY environment value")
             return None
@@ -86,20 +106,20 @@ def _get_fernet() -> Optional[Fernet]:
         key_dir = os.path.dirname(os.path.abspath(db))
         key_file = os.path.join(key_dir, ".encryption_key")
         if os.path.exists(key_file):
-            with safe_open(key_file, key_dir, "rb") as f:
-                key = f.read()
-            _FERNET = Fernet(key)
-            return _FERNET
+            with safe_open_t(key_file, key_dir, "rb") as f:
+                key: bytes = f.read()
+            _fernet = Fernet(key)
+            return _fernet
         # generate and persist a new key
         key = Fernet.generate_key()
         os.makedirs(key_dir, exist_ok=True)
-        with safe_open(key_file, key_dir, "wb") as f:
+        with safe_open_t(key_file, key_dir, "wb") as f:
             f.write(key)
         logger.info(
             "Generated new encryption key for config at %s", sanitize_for_log(key_file)
         )
-        _FERNET = Fernet(key)
-        return _FERNET
+        _fernet = Fernet(key)
+        return _fernet
     except Exception:
         logger.exception("Failed to initialize encryption key for config service")
         return None
@@ -112,6 +132,7 @@ def _get_db_path() -> str:
 def init_db() -> None:
     """Ensure the config_kv table exists in the configured SQLite DB."""
     db = _get_db_path()
+    conn = None
     try:
         conn = sqlite3.connect(db, timeout=5)
         with conn:
@@ -151,7 +172,8 @@ def init_db() -> None:
         logger.exception(f"Failed to initialize config DB at {db}: {e}")
     finally:
         try:
-            conn.close()
+            if conn is not None:
+                conn.close()
         except Exception:
             pass
     # Clear in-memory cache when initializing the DB so tests and fresh
@@ -162,6 +184,7 @@ def init_db() -> None:
 
 def _read_kv(key: str) -> Optional[str]:
     db = _get_db_path()
+    conn = None
     try:
         conn = sqlite3.connect(db, timeout=5)
         conn.row_factory = sqlite3.Row
@@ -190,13 +213,15 @@ def _read_kv(key: str) -> Optional[str]:
         return None
     finally:
         try:
-            conn.close()
+            if conn is not None:
+                conn.close()
         except Exception:
             pass
 
 
 def _write_kv(key: str, value: str) -> None:
     db = _get_db_path()
+    conn = None
     try:
         conn = sqlite3.connect(db, timeout=5)
         with conn:
@@ -208,7 +233,8 @@ def _write_kv(key: str, value: str) -> None:
         logger.exception(f"Failed to write key {key} into config DB: {e}")
     finally:
         try:
-            conn.close()
+            if conn is not None:
+                conn.close()
         except Exception:
             pass
 
@@ -218,9 +244,10 @@ def _read_list(key: str) -> List[str]:
     if not raw:
         return []
     try:
-        val = json.loads(raw)
+        val: Any = json.loads(raw)
         if isinstance(val, list):
-            return [str(x) for x in val]
+            val_list = cast(List[Any], val)
+            return [str(x) for x in val_list]
     except Exception as e:
         logger.warning(f"Invalid JSON for key {key}: {e}")
     return []
@@ -284,9 +311,10 @@ def _read_list_with_tenant(key: str, tenant_code: str) -> List[str]:
     if not raw:
         return []
     try:
-        val = json.loads(raw)
+        val: Any = json.loads(raw)
         if isinstance(val, list):
-            return [str(x) for x in val]
+            val_list = cast(List[Any], val)
+            return [str(x) for x in val_list]
     except Exception as e:
         logger.warning(f"Invalid JSON for key {key} tenant {tenant_code}: {e}")
     return []
@@ -311,6 +339,7 @@ def get_config_meta(key: str, tenant_code: str = "") -> tuple[Optional[str], boo
     The caller can inspect the boolean flag to decide how to respond.
     """
     db = _get_db_path()
+    conn = None
     try:
         conn = sqlite3.connect(db, timeout=5)
         conn.row_factory = sqlite3.Row
@@ -334,7 +363,8 @@ def get_config_meta(key: str, tenant_code: str = "") -> tuple[Optional[str], boo
         return None, False
     finally:
         try:
-            conn.close()
+            if conn is not None:
+                conn.close()
         except Exception:
             pass
 
@@ -358,6 +388,7 @@ def set_config(
 
 def delete_config(key: str, tenant_code: str = "") -> None:
     db = _get_db_path()
+    conn = None
     try:
         conn = sqlite3.connect(db, timeout=5)
         with conn:
@@ -371,7 +402,8 @@ def delete_config(key: str, tenant_code: str = "") -> None:
         )
     finally:
         try:
-            conn.close()
+            if conn is not None:
+                conn.close()
         except Exception:
             pass
     # Invalidate cache so middleware won't use stale values
@@ -380,6 +412,7 @@ def delete_config(key: str, tenant_code: str = "") -> None:
 
 def _read_kv_with_tenant(key: str, tenant_code: str) -> Optional[str]:
     db = _get_db_path()
+    conn = None
     try:
         conn = sqlite3.connect(db, timeout=5)
         conn.row_factory = sqlite3.Row
@@ -414,13 +447,15 @@ def _read_kv_with_tenant(key: str, tenant_code: str) -> Optional[str]:
         return None
     finally:
         try:
-            conn.close()
+            if conn is not None:
+                conn.close()
         except Exception:
             pass
 
 
 def _write_kv_with_tenant(key: str, value: str, tenant_code: str) -> None:
     db = _get_db_path()
+    conn = None
     try:
         conn = sqlite3.connect(db, timeout=5)
         with conn:
@@ -436,7 +471,8 @@ def _write_kv_with_tenant(key: str, value: str, tenant_code: str) -> None:
         )
     finally:
         try:
-            conn.close()
+            if conn is not None:
+                conn.close()
         except Exception:
             pass
 
@@ -448,6 +484,7 @@ def _write_encrypted_kv(key: str, value: str) -> None:
         raise RuntimeError("No encryption key available to encrypt config value")
     enc = f.encrypt(value.encode()).decode()
     db = _get_db_path()
+    conn = None
     try:
         conn = sqlite3.connect(db, timeout=5)
         with conn:
@@ -459,7 +496,8 @@ def _write_encrypted_kv(key: str, value: str) -> None:
         logger.exception(f"Failed to write encrypted key {key} into config DB: {e}")
     finally:
         try:
-            conn.close()
+            if conn is not None:
+                conn.close()
         except Exception:
             pass
 
@@ -471,6 +509,7 @@ def _write_encrypted_kv_with_tenant(key: str, value: str, tenant_code: str) -> N
         raise RuntimeError("No encryption key available to encrypt config value")
     enc = f.encrypt(value.encode()).decode()
     db = _get_db_path()
+    conn = None
     try:
         conn = sqlite3.connect(db, timeout=5)
         with conn:
@@ -484,7 +523,8 @@ def _write_encrypted_kv_with_tenant(key: str, value: str, tenant_code: str) -> N
         )
     finally:
         try:
-            conn.close()
+            if conn is not None:
+                conn.close()
         except Exception:
             pass
 
@@ -512,3 +552,184 @@ def load_and_apply_settings() -> None:
             logger.debug("No config DB changes detected")
     except Exception as e:
         logger.exception(f"Failed to load/apply config settings: {e}")
+
+
+# Optional helper: list keys for a tenant
+def list_keys(tenant_code: str = "") -> List[str]:
+    db = _get_db_path()
+    conn = None
+    try:
+        conn = sqlite3.connect(db, timeout=5)
+        cur = conn.execute(
+            "SELECT key FROM config_kv WHERE tenant_code=? ORDER BY key",
+            (tenant_code or "",),
+        )
+        return [row[0] for row in cur.fetchall()]
+    except Exception:
+        return []
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+# Configuration service providing tenant/global config helpers.
+# This mirrors the patterns used in FloudsVector.Py: read settings via
+# `ConfigLoader`, normalize lists, and provide helpers to match patterns.
+# Cache can be reset in tests.
+
+
+class ConfigService:
+    _cache: Optional[dict[str, List[str]]] = None
+
+    @classmethod
+    def _load(cls) -> dict[str, List[str]]:
+        try:
+            # Prefer values persisted in the config DB via module helpers.
+            cors = get_cors_origins()
+            trusted = get_trusted_hosts()
+            return {"cors_origins": list(cors), "trusted_hosts": list(trusted)}
+        except Exception as e:
+            logger.exception("Failed to load app settings in ConfigService: %s", e)
+            return {"cors_origins": [], "trusted_hosts": []}
+
+    @classmethod
+    def reset_cache(cls):
+        cls._cache = None
+
+    @classmethod
+    def _ensure_cache(cls):
+        if cls._cache is None:
+            cls._cache = cls._load()
+
+    @classmethod
+    def get_cors_origins(cls, tenant_code: str = "") -> List[str]:
+        # For tenant-scoped values, defer to DB-backed module helper which
+        # supports tenant-specific storage. For the default tenant (empty
+        # string), use the cached value for performance.
+        if tenant_code:
+            return get_cors_origins(tenant_code)
+        cls._ensure_cache()
+        assert cls._cache is not None
+        return list(cls._cache.get("cors_origins", []))
+
+    @classmethod
+    def get_trusted_hosts(cls, tenant_code: str = "") -> List[str]:
+        if tenant_code:
+            return get_trusted_hosts(tenant_code)
+        cls._ensure_cache()
+        assert cls._cache is not None
+        return list(cls._cache.get("trusted_hosts", []))
+
+    @staticmethod
+    def _match_pattern(value: str, pattern: Optional[str]) -> bool:
+        if pattern is None:
+            return False
+        val = (value or "").strip()
+        pat = pattern.strip()
+        if pat == "":
+            return True
+        if pat == "*":
+            return True
+        if pat.startswith("re:"):
+            try:
+                return bool(re.fullmatch(pat[3:], val, flags=re.IGNORECASE))
+            except re.error:
+                logger.warning("Invalid regex in config: %s", pat)
+                return False
+        if pat.startswith("*.") or pat.startswith("."):
+            root = pat.lstrip("*.").lstrip(".").lower()
+            v = val.lower()
+            return v == root or v.endswith("." + root)
+        if "*" in pat or "?" in pat:
+            esc = re.escape(pat)
+            esc = esc.replace(r"\*", ".*")
+            esc = esc.replace(r"\?", ".")
+            try:
+                return bool(re.fullmatch(esc, val, flags=re.IGNORECASE))
+            except re.error:
+                return False
+        return val.lower() == pat.lower()
+
+    @classmethod
+    def is_allowed(cls, value: str, allowed: Iterable[str]) -> bool:
+        for p in allowed:
+            if cls._match_pattern(value, p):
+                return True
+        return False
+
+    # Instance methods delegating to module-level helpers for DB-backed operations
+    def init_db(self) -> None:
+        # Initialize DB and clear both module-level and class-level caches so
+        # subsequent reads reflect the freshly-created DB state.
+        init_db()
+        # Clear class cache
+        self.reset_cache()
+        try:
+            _invalidate_cache_for_key("cors_origins", None)
+            _invalidate_cache_for_key("trusted_hosts", None)
+        except Exception:
+            pass
+
+    def set_cors_origins(
+        self, origins: List[str], tenant_code: str = "", encrypted: bool = False
+    ) -> None:
+        res = set_cors_origins(origins, tenant_code=tenant_code, encrypted=encrypted)
+        # Invalidate class-level cache so subsequent reads reflect DB changes
+        try:
+            self.reset_cache()
+            _invalidate_cache_for_key(
+                "cors_origins", tenant_code if tenant_code != "" else None
+            )
+        except Exception:
+            pass
+        return res
+
+    def set_trusted_hosts(
+        self, hosts: List[str], tenant_code: str = "", encrypted: bool = False
+    ) -> None:
+        res = set_trusted_hosts(hosts, tenant_code=tenant_code, encrypted=encrypted)
+        try:
+            self.reset_cache()
+            _invalidate_cache_for_key(
+                "trusted_hosts", tenant_code if tenant_code != "" else None
+            )
+        except Exception:
+            pass
+        return res
+
+    def get_config(self, key: str, tenant_code: str = "") -> Optional[str]:
+        return get_config(key, tenant_code=tenant_code)
+
+    def set_config(
+        self, key: str, value: str, tenant_code: str = "", encrypted: bool = False
+    ) -> None:
+        res = set_config(key, value, tenant_code=tenant_code, encrypted=encrypted)
+        try:
+            self.reset_cache()
+            _invalidate_cache_for_key(key, tenant_code if tenant_code != "" else None)
+        except Exception:
+            pass
+        return res
+
+    def delete_config(self, key: str, tenant_code: str = "") -> None:
+        res = delete_config(key, tenant_code=tenant_code)
+        try:
+            self.reset_cache()
+            _invalidate_cache_for_key(key, tenant_code if tenant_code != "" else None)
+        except Exception:
+            pass
+        return res
+
+    def get_config_meta(
+        self, key: str, tenant_code: str = ""
+    ) -> tuple[Optional[str], bool]:
+        return get_config_meta(key, tenant_code=tenant_code)
+
+    def load_and_apply_settings(self) -> None:
+        return load_and_apply_settings()
+
+
+config_service = ConfigService()

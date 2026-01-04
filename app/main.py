@@ -104,7 +104,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize security DB and start a small watcher to refresh CORS/trusted hosts
     try:
-        from app.services import config_service
+        from app.services.config_service import config_service
 
         config_service.init_db()
 
@@ -188,8 +188,12 @@ app = FastAPI(
 )
 # Configure and add middleware
 # Use tenant-aware middleware for CORS and Trusted Host enforcement
-app.add_middleware(TenantTrustedHostMiddleware)
+# Register CORS first so browser preflight and CORS headers are handled
+# before TrustedHost enforces server-side host restrictions. This ensures
+# browsers receive correct CORS responses while trusted-host remains a
+# server-side safety net.
 app.add_middleware(TenantCorsMiddleware)
+app.add_middleware(TenantTrustedHostMiddleware)
 app.add_middleware(AuthMiddleware)
 app.add_middleware(ErrorHandlerMiddleware)
 app.add_middleware(RateLimitMiddleware, calls=100, period=60)

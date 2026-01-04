@@ -1,19 +1,26 @@
 {
-    "venvPath": "./",
+    "venvPath": ".",
     "venv": ".venv",
     "pythonVersion": "3.12",
     "typeCheckingMode": "basic",
-    "reportMissingImports": false,
+
+    // Allow Pyright to show missing imports instead of hanging
+    "reportMissingImports": true,
     "reportOptionalMemberAccess": true,
+
     "exclude": [
         "tools/**",
         "magicmock/**",
         "milvus/**",
         "docs/**",
-        ".vs/**",
         ".env/**",
-        "docs/**",
         "data/**",
-        "tests/**/data/**"
+        "tests/**/data/**",
+        "tests/**"
+    ],
+
+    // Only analyze your application code
+    "include": [
+        "app/**"
     ]
 }

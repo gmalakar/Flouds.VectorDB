@@ -18,7 +18,7 @@ def test_match_pattern_basic():
     assert _match_pattern("example.com", "*.example.com")
     assert not _match_pattern("badexample.com", "*.example.com")
     # regex
-    assert _match_pattern("sub.example.org", "re:^(.+\\.)?example\\.org$")
+    assert _match_pattern("sub.example.org", "re:^(?:.+\\.)?example\\.org$")
 
 
 def test_is_allowed_list():

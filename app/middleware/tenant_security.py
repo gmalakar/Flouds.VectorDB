@@ -6,10 +6,43 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
+from app.app_init import APP_SETTINGS
 from app.logger import get_logger
-from app.services import config_service
+from app.modules.key_manager import key_manager
+from app.services.config_service import config_service
 
 logger = get_logger("tenant_security")
+
+
+def _extract_token(request: Request) -> Optional[str]:
+    """Extract bearer token from Authorization header or `token` query param in dev."""
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return auth_header[7:].strip()
+    if not APP_SETTINGS.app.is_production:
+        return request.query_params.get("token")
+    return None
+
+
+def _cors_preflight(origin_value: Optional[str]) -> Response:
+    """Return a 204 preflight response with standard CORS headers for origin_value."""
+    allow = origin_value or "*"
+    headers = {
+        "Access-Control-Allow-Origin": allow,
+        "Access-Control-Allow-Methods": "*",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Allow-Credentials": "true",
+    }
+    return Response(status_code=204, headers=headers)
+
+
+def _apply_cors_headers(response: Response, origin_value: Optional[str]) -> None:
+    """Append standard CORS headers to an existing response in-place."""
+    allow = origin_value or "*"
+    response.headers["Access-Control-Allow-Origin"] = allow
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
 
 
 def _match_pattern(value: Optional[str], pattern: Optional[str]) -> bool:
@@ -94,6 +127,30 @@ class TenantTrustedHostMiddleware(BaseHTTPMiddleware):
             # Host header may contain port; compare only hostname portion
             hostname = (host.split(":")[0] if host else "").lower()
             if not _is_allowed(hostname, [a.lower() for a in allowed]):
+                # Host is not in the trusted list. As a final override allow
+                # a superadmin-authenticated client to bypass this check. We
+                # use the same token extraction helper to avoid duplicating logic.
+                try:
+                    token = _extract_token(request)
+                    if token:
+                        client = key_manager.authenticate_client(
+                            token, tenant_code=tenant or ""
+                        )
+                        if (
+                            client
+                            and getattr(client, "client_type", "") == "superadmin"
+                        ):
+                            logger.info(
+                                "Superadmin bypass: allowing request from host %s for tenant %s",
+                                hostname,
+                                tenant,
+                            )
+                            return await call_next(request)
+                except Exception:
+                    logger.exception(
+                        "Error checking superadmin bypass for trusted-host"
+                    )
+
                 logger.warning(
                     "Blocked request from untrusted host %s for tenant %s",
                     hostname,
@@ -162,20 +219,9 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
             # If same-origin by hostname (or localhost aliases), allow and echo Origin for preflight
             if origin_header and _same_origin(host_only, origin_host_only):
                 if request.method == "OPTIONS":
-                    return Response(
-                        status_code=204,
-                        headers={
-                            "Access-Control-Allow-Origin": origin_header,
-                            "Access-Control-Allow-Methods": "*",
-                            "Access-Control-Allow-Headers": "*",
-                            "Access-Control-Allow-Credentials": "true",
-                        },
-                    )
+                    return _cors_preflight(origin_header)
                 response = await call_next(request)
-                response.headers["Access-Control-Allow-Origin"] = origin_header
-                response.headers["Access-Control-Allow-Methods"] = "*"
-                response.headers["Access-Control-Allow-Headers"] = "*"
-                response.headers["Access-Control-Allow-Credentials"] = "true"
+                _apply_cors_headers(response, origin_header)
                 return response
 
             if "*" not in allowed_origins and origin_header:
@@ -184,19 +230,104 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
                     _is_allowed(origin_header, allowed_origins)
                     or _is_allowed(origin_host, allowed_origins)
                 ):
-                    logger.warning(
-                        "Blocked cross-origin request from %s for tenant %s",
-                        origin_header,
-                        tenant,
-                    )
-                    return JSONResponse(
-                        status_code=403,
-                        content={
-                            "detail": "CORS origin not allowed",
-                            "origin": origin_header,
-                            "origin_host": origin_host,
-                        },
-                    )
+                    # Origin not allowed by CORS patterns. As a fallback, consult
+                    # tenant-scoped `trusted_hosts` and global `APP_SETTINGS`.
+                    # If the Host is trusted for the tenant, allow the request
+                    # (this lets trusted hosts bypass strict CORS pattern checks).
+                    try:
+                        from app.app_init import APP_SETTINGS
+
+                        # tenant may be empty string for default tenant
+                        host = request.headers.get("host", "")
+                        host_only = (host.split(":")[0] if host else "").lower()
+
+                        trusted = config_service.get_trusted_hosts(tenant_code=tenant)
+                        if not trusted:
+                            trusted = getattr(
+                                APP_SETTINGS.security, "trusted_hosts", ["*"]
+                            )
+
+                        # If host matches any trusted-host pattern, treat as allowed
+                        # only for authenticated clients (require token). This avoids
+                        # silently allowing unauthenticated cross-origin requests
+                        # simply because the Host is in a trusted list.
+                        if _is_allowed(host_only, [a.lower() for a in trusted]):
+                            # Host is trusted for tenant — allow only if the client
+                            # is authenticated (require token). If not authenticated
+                            # we fall through and allow superadmin-only bypass later.
+                            try:
+                                token = _extract_token(request)
+                                if token:
+                                    client = key_manager.authenticate_client(
+                                        token, tenant_code=tenant or ""
+                                    )
+                                    if client:
+                                        logger.info(
+                                            "Origin %s blocked by CORS but Host %s is trusted for tenant %s and client authenticated; allowing request",
+                                            origin_header,
+                                            host_only,
+                                            tenant,
+                                        )
+                                        if request.method == "OPTIONS":
+                                            return _cors_preflight(origin_header)
+                                        response = await call_next(request)
+                                        _apply_cors_headers(response, origin_header)
+                                        return response
+                            except Exception:
+                                logger.exception(
+                                    "Error authenticating client during trusted-host CORS fallback"
+                                )
+                        # Not trusted either: allow superadmin bypass if present,
+                        # otherwise block as before.
+                        # At this point both CORS origin patterns and trusted-host
+                        # checks have failed. Allow a superadmin authenticated
+                        # client to bypass as a last resort.
+                        try:
+                            token = _extract_token(request)
+                            if token:
+                                client = key_manager.authenticate_client(
+                                    token, tenant_code=tenant or ""
+                                )
+                                if (
+                                    client
+                                    and getattr(client, "client_type", "")
+                                    == "superadmin"
+                                ):
+                                    logger.info(
+                                        "Superadmin bypass: allowing cross-origin request from %s for tenant %s",
+                                        origin_header,
+                                        tenant,
+                                    )
+                                    if request.method == "OPTIONS":
+                                        return _cors_preflight(origin_header)
+                                    response = await call_next(request)
+                                    _apply_cors_headers(response, origin_header)
+                                    return response
+                        except Exception:
+                            logger.exception(
+                                "Error checking superadmin bypass during CORS flow"
+                            )
+
+                        logger.warning(
+                            "Blocked cross-origin request from %s for tenant %s",
+                            origin_header,
+                            tenant,
+                        )
+                        return JSONResponse(
+                            status_code=403,
+                            content={
+                                "detail": "CORS origin not allowed",
+                                "origin": origin_header,
+                                "origin_host": origin_host,
+                            },
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Error evaluating trusted hosts during CORS check"
+                        )
+                        return JSONResponse(
+                            status_code=500, content={"detail": "CORS middleware error"}
+                        )
 
             # Determine value to echo in Access-Control-Allow-Origin
             allow_origin = (
@@ -207,20 +338,11 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
 
             # Handle preflight
             if request.method == "OPTIONS":
-                headers = {
-                    "Access-Control-Allow-Origin": allow_origin,
-                    "Access-Control-Allow-Methods": "*",
-                    "Access-Control-Allow-Headers": "*",
-                    "Access-Control-Allow-Credentials": "true",
-                }
-                return Response(status_code=204, headers=headers)
+                return _cors_preflight(allow_origin)
 
             response = await call_next(request)
             # Append CORS headers
-            response.headers["Access-Control-Allow-Origin"] = allow_origin
-            response.headers["Access-Control-Allow-Methods"] = "*"
-            response.headers["Access-Control-Allow-Headers"] = "*"
-            response.headers["Access-Control-Allow-Credentials"] = "true"
+            _apply_cors_headers(response, allow_origin)
             return response
         except Exception:
             logger.exception("CORS middleware error")

@@ -10,7 +10,7 @@ from app.logger import get_logger
 from app.models.config_request import ConfigRequest
 from app.models.delete_config_request import DeleteConfigRequest
 from app.modules.key_manager import key_manager
-from app.services import config_service
+from app.services.config_service import config_service
 from app.utils.common_utils import CommonUtils
 
 logger = get_logger("config.router")

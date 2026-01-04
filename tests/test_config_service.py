@@ -1,7 +1,7 @@
 import json
 
 from app.app_init import APP_SETTINGS
-from app.services import config_service
+from app.services.config_service import config_service
 
 
 def _setup_db(tmp_path):
