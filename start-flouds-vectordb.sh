@@ -176,6 +176,27 @@ else
     set -o allexport
     source "$ENV_FILE"
     set +o allexport
+    
+    # Display parsed environment variables (mask sensitive values)
+    echo "Parsed environment variables:"
+    while IFS='=' read -r key value; do
+        # Skip empty lines and comments
+        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+        
+        # Remove quotes from value
+        value=$(echo "$value" | sed 's/^["'\'']*//;s/["'\'']*$//')
+        
+        # Mask likely secrets for safety when printing
+        if [[ "$key" =~ (PASSWORD|SECRET|KEY|TOKEN) ]]; then
+            if [[ -n "$value" ]]; then
+                echo "$key=<masked length=${#value}>"
+            else
+                echo "$key=<empty>"
+            fi
+        else
+            echo "$key=$value"
+        fi
+    done < <(grep -v '^[[:space:]]*$' "$ENV_FILE" 2>/dev/null || true)
 fi
 
 # Require FLOUDS_DATA_PATH_AT_HOST and FLOUDS_SECRET_PATH_AT_HOST to be set for host mapping
@@ -193,12 +214,7 @@ fi
 : "${VECTORDB_NETWORK:=milvus_network}"
 : "${VECTORDB_CONTAINER_NAME:=milvus-standalone}"
 
-# Check and create log directory if needed
-if [[ -n "$VECTORDB_LOG_PATH" ]]; then
-    set_directory_permissions "$VECTORDB_LOG_PATH" "Log"
-else
-    echo "⚠️ VECTORDB_LOG_PATH not set. Container logs will not be persisted to host."
-fi
+# No need to check/create log directory here - it will be created if FLOUDS_LOG_PATH_AT_HOST is set
 
 # Ensure networks exist
 ensure_network "$FLOUDS_VECTOR_NETWORK"
@@ -287,9 +303,10 @@ else
 fi
 
 # Add log directory if specified
-if [[ -n "$VECTORDB_LOG_PATH" ]]; then
-    echo "Mounting logs: $VECTORDB_LOG_PATH → $CONTAINER_LOG_PATH"
-    DOCKER_ARGS+=(-v "$VECTORDB_LOG_PATH:$CONTAINER_LOG_PATH:rw")
+if [[ -n "$FLOUDS_LOG_PATH_AT_HOST" ]]; then
+    host_log_path="$FLOUDS_LOG_PATH_AT_HOST"
+    echo "Mounting logs: $host_log_path → $CONTAINER_LOG_PATH"
+    DOCKER_ARGS+=(-v "$host_log_path:$CONTAINER_LOG_PATH:rw")
     DOCKER_ARGS+=(-e "FLOUDS_LOG_PATH=$CONTAINER_LOG_PATH")
 fi
 

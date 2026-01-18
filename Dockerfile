@@ -1,15 +1,14 @@
 # Build stage
-FROM python:3.11-slim AS builder
+FROM python:3.11-alpine AS builder
 
 # Keep pip lean and avoid .pyc files to shrink copy size
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Install build dependencies only in the builder
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential gcc g++ \
-    && rm -rf /var/lib/apt/lists/*
+# Install build dependencies only in the builder (alpine packages are smaller)
+RUN apk add --no-cache --virtual .build-deps \
+    gcc musl-dev libffi-dev openssl-dev python3-dev
 
 # Create isolated venv for runtime reuse
 RUN python -m venv /opt/venv
@@ -28,10 +27,14 @@ RUN python -m pip install --no-compile -r /tmp/requirements.txt && \
     find /opt/venv -type f -name "*.pyc" -delete && \
     find /opt/venv -type f -name "*.exe" -delete && \
     find /opt/venv -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true && \
-    rm -rf /opt/venv/lib/python3.11/site-packages/pip/_vendor/distlib/*.exe
+    rm -rf /opt/venv/lib/python3.11/site-packages/pip/_vendor/distlib/*.exe && \
+    # Remove build dependencies to reduce layer size
+    apk del .build-deps && \
+    # Clean up any remaining pip cache
+    rm -rf /root/.cache /tmp/*
 
 # Runtime stage
-FROM python:3.11-slim
+FROM python:3.11-alpine
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -46,11 +49,9 @@ ENV PYTHONUNBUFFERED=1 \
     FLOUDS_APP_SECRETS=/flouds-vector/data/secrets \
     PATH=/opt/venv/bin:$PATH
 
-# Purge tar if present to avoid CVE; keep runtime minimal
-RUN apt-get update && \
-    apt-get purge -y --auto-remove tar || true && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+# Install runtime dependencies only (libffi for cryptography, libstdc++ for some C++ libs)
+RUN apk add --no-cache libffi libstdc++ && \
+    rm -rf /tmp/* /var/cache/apk/*
 
 # Copy prebuilt venv from builder
 COPY --from=builder /opt/venv /opt/venv
