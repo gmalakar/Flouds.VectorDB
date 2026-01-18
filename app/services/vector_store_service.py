@@ -40,6 +40,50 @@ logger = get_logger("vector_store_service")
 T = TypeVar("T")
 
 
+# Exception handler mapping for service methods
+# Maps exception types to (message_template, log_message) tuples
+_SERVICE_EXCEPTION_HANDLERS = {
+    UserManagementError: (
+        "User management error: {}",
+        "User management error during operation",
+    ),
+    MilvusOperationError: (
+        "Database operation error: {}",
+        "Database error during operation",
+    ),
+    VectorStoreError: ("Vector store error: {}", "Vector store error during operation"),
+    SearchError: ("Search error: {}", "Search error during operation"),
+    ValidationError: ("Validation error: {}", "Validation error during operation"),
+    AuthenticationError: (
+        "Database token error: {}",
+        "Authentication error during operation",
+    ),
+    ValueError: ("Invalid data: {}", "Data validation error during operation"),
+}
+
+
+def _handle_service_exception(response: Any, exc: Exception) -> None:
+    """
+    Handle exceptions in service methods using centralized exception mapping.
+
+    Args:
+        response: The response object to update with error details.
+        exc: The exception that occurred.
+    """
+    response.success = False
+
+    # Check for known exception types
+    for exc_type, (msg_template, log_msg) in _SERVICE_EXCEPTION_HANDLERS.items():
+        if isinstance(exc, exc_type):
+            response.message = msg_template.format(str(exc))
+            logger.exception(log_msg)
+            return
+
+    # Generic fallback for unexpected exceptions
+    response.message = f"Unexpected error: {str(exc)}"
+    logger.exception("Unexpected error during operation")
+
+
 def service_method(
     default_response_factory: Callable[..., Any],
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -68,38 +112,8 @@ def service_method(
             response_any = cast(Any, response)
             try:
                 return_value = main_logic(response)
-            except UserManagementError as e:
-                response_any.success = False
-                response_any.message = f"User management error: {str(e)}"
-                logger.exception("User management error during operation")
-            except MilvusOperationError as e:
-                response_any.success = False
-                response_any.message = f"Database operation error: {str(e)}"
-                logger.exception("Database error during operation")
-            except VectorStoreError as e:
-                response_any.success = False
-                response_any.message = f"Vector store error: {str(e)}"
-                logger.exception("Vector store error during operation")
-            except SearchError as e:
-                response_any.success = False
-                response_any.message = f"Search error: {str(e)}"
-                logger.exception("Search error during operation")
-            except ValidationError as e:
-                response_any.success = False
-                response_any.message = f"Validation error: {str(e)}"
-                logger.exception("Validation error during operation")
-            except AuthenticationError as e:
-                response_any.success = False
-                response_any.message = f"Database token error: {str(e)}"
-                logger.exception("Authentication error during operation")
-            except ValueError as e:
-                response_any.success = False
-                response_any.message = f"Invalid data: {str(e)}"
-                logger.exception("Data validation error during operation")
             except Exception as e:
-                response_any.success = False
-                response_any.message = f"Unexpected error: {str(e)}"
-                logger.exception("Unexpected error during operation")
+                _handle_service_exception(response_any, e)
             finally:
                 response_any.time_taken = time() - start_time
                 logger.debug(

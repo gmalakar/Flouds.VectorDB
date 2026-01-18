@@ -75,11 +75,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
             bool(key_manager.get_all_tokens()) if self.enabled else True
         )
 
-        # Cache public endpoints for faster lookup
+        # Cache public endpoints for faster lookup.
+        # NOTE: avoid including root-level prefixes such as '/' here because
+        # if the matching logic ever uses prefix checks (e.g. startswith)
+        # that would unintentionally mark every route as public.
+        # Keep only explicit public paths.
         self.public_endpoints = frozenset(
             [
-                "/",
-                "/api/v1",
                 "/api/v1/metrics",
                 "/api/v1/health",
                 "/api/v1/health/live",

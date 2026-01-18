@@ -1,0 +1,7 @@
+﻿python : C:\Workspace\AI\Python\Python312\python.exe: No module named pytest
+At line:1 char:55
++ ... evelopment; python -m pytest -q -o disable_warnings=false -W always - ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Workspace\AI...le named pytest:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

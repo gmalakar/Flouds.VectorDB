@@ -11,7 +11,11 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from app.exceptions.custom_exceptions import FloudsVectorError
+from app.exceptions.custom_exceptions import (
+    DatabaseConnectionError,
+    FloudsVectorError,
+    MilvusConnectionError,
+)
 from app.logger import get_logger
 from app.utils.error_formatter import format_error_response, sanitize_error_message
 
@@ -107,6 +111,23 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
                     message="Invalid input data provided",
                     details=str(e),
                     status_code=400,
+                    request_id=request_id,
+                    path=str(request.url.path),
+                    method=request.method,
+                ),
+            )
+        except (MilvusConnectionError, DatabaseConnectionError) as e:
+            sanitized_error = sanitize_error_message(str(e))
+            logger.error(f"Database connection error: {sanitized_error}", exc_info=True)
+            return JSONResponse(
+                status_code=503,
+                headers={"X-Request-ID": request_id},
+                content=format_error_response(
+                    error_type="Database Unavailable",
+                    message="Database service is temporarily unavailable",
+                    details=str(e),
+                    status_code=503,
+                    retry_after=30,
                     request_id=request_id,
                     path=str(request.url.path),
                     method=request.method,

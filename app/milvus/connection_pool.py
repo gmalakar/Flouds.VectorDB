@@ -177,6 +177,38 @@ class MilvusConnectionPool:
                 ],
             }
 
+    def close(self) -> None:
+        """
+        Close all connections in the pool gracefully.
+
+        This method should be called during application shutdown to ensure
+        all Milvus connections are properly closed. Thread-safe.
+
+        Returns:
+            None
+        """
+        with self.lock:
+            closed_count = 0
+            for key, conn_info in list(self.connections.items()):
+                try:
+                    client = conn_info["client"]
+                    if hasattr(client, "close"):
+                        client.close()
+                    closed_count += 1
+                    logger.debug(f"Closed Milvus connection: {sanitize_for_log(key)}")
+                except Exception as e:
+                    logger.warning(
+                        f"Error closing connection {sanitize_for_log(key)}: {e}"
+                    )
+                finally:
+                    # Always remove from pool even if close fails
+                    if key in self.connections:
+                        del self.connections[key]
+
+            if closed_count > 0:
+                logger.info(f"Connection pool closed: {closed_count} connections closed")
+            self.connections.clear()
+
 
 # Global connection pool instance
 milvus_pool = MilvusConnectionPool()

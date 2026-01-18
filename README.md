@@ -53,10 +53,25 @@ tests/              # Pytest-based unit tests
 
 ---
 
+## Usage Examples
+
+For practical, copy-paste-friendly examples of common tasks, see [docs/USAGE_EXAMPLES.md](docs/USAGE_EXAMPLES.md).
+
+Covered topics:
+- Tenant security helpers (CORS preflight/headers, trusted hosts)
+- Transaction manager for multi-step operations with rollback
+- Tenant rate limiter cleanup patterns
+- Log sanitization and audit logging helpers
+- Milvus connection pool lifecycle (acquire/close)
+- AppSettings configuration validation
+
+---
+
 Notable services and files:
 
 - `app/services/config_service.py` — stores tenant-scoped configuration values (persisted in the `config_kv` table) and implements an in-memory, thread-safe cache with write-time invalidation.
-- `app/middleware/` — tenant-aware and operational middlewares such as CORS, trusted-host enforcement, authentication/authorization, rate limiting, metrics, and request logging.
+- `app/middleware/` — tenant-aware and operational middlewares such as CORS, trusted-host enforcement, authentication/authorization, rate limiting, metrics, and request logging. Examples: see [docs/USAGE_EXAMPLES.md](docs/USAGE_EXAMPLES.md#tenant-security).
+- `app/modules/transaction_manager.py` — transactional operations with automatic rollback for multi-step workflows. Examples: see [docs/USAGE_EXAMPLES.md](docs/USAGE_EXAMPLES.md#transaction-manager).
 - `app/modules/key_manager.py` — manages client records and encryption of client secrets. KeyManager supports tenant-scoped clients and enforces tenant matching when a tenant is supplied to authentication calls.
 
 Developer snippet: resolving tenant in handlers
@@ -521,6 +536,8 @@ FLOUDS_LOG_PATH=/var/log/flouds
 Logs are written to the `/var/log/flouds` directory inside the container and can be mapped to your host for persistence.  
 Configure log file and level in [app/config/appsettings.json](app/config/appsettings.json) or via environment variables.
 
+Examples: see [docs/USAGE_EXAMPLES.md](docs/USAGE_EXAMPLES.md#log-sanitization-and-audit) for log sanitization and audit logging helpers.
+
 ---
 
 ## Development
@@ -559,6 +576,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and [SECURITY.
 - **Input sanitization** for XSS prevention
 - **Optimized performance** with improved algorithms
 
+Examples: see [docs/USAGE_EXAMPLES.md](docs/USAGE_EXAMPLES.md#tenant-security) for CORS helpers and trusted host patterns.
+
 ### Monitoring & Observability
 - **Health checks** with Milvus connectivity status
 - **Performance metrics** with request timing
@@ -570,6 +589,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and [SECURITY.
 - **Environment-based configuration** (Development/Production)
 - **Docker containerization** with multi-stage builds
 - **Thread-safe architecture** for concurrent operations
+
+### Transactional Operations
+For coordinating multi-step operations with automatic rollback, see examples in [docs/USAGE_EXAMPLES.md](docs/USAGE_EXAMPLES.md#transaction-manager).
 
 ### Security & Code Quality Improvements
 

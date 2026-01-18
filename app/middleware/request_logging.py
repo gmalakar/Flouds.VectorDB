@@ -16,6 +16,9 @@ from app.utils.log_sanitizer import sanitize_for_log
 
 logger = get_logger("request_logging")
 
+# Maximum request body size to log (10KB) to prevent memory exhaustion
+MAX_LOG_BODY_SIZE = 10_000
+
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """
@@ -57,17 +60,24 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             try:
                 body = await request.body()
                 if body:
-                    # Parse and sanitize JSON body
-                    try:
-                        json_body = json.loads(body)
-                        sanitized_body = self._sanitize_request_body(json_body)
+                    # Check body size to prevent memory exhaustion
+                    body_size = len(body)
+                    if body_size > MAX_LOG_BODY_SIZE:
                         logger.debug(
-                            f"Request[{request_id}] body: {json.dumps(sanitized_body)}"
+                            f"Request[{request_id}] body: <truncated - {body_size} bytes exceeds limit of {MAX_LOG_BODY_SIZE}>"
                         )
-                    except json.JSONDecodeError:
-                        logger.debug(
-                            f"Request[{request_id}] body (non-JSON): {sanitize_for_log(body.decode()[:500])}"
-                        )
+                    else:
+                        # Parse and sanitize JSON body
+                        try:
+                            json_body = json.loads(body)
+                            sanitized_body = self._sanitize_request_body(json_body)
+                            logger.debug(
+                                f"Request[{request_id}] body: {json.dumps(sanitized_body)}"
+                            )
+                        except json.JSONDecodeError:
+                            logger.debug(
+                                f"Request[{request_id}] body (non-JSON): {sanitize_for_log(body.decode()[:500])}"
+                            )
 
                 # Recreate request with body for downstream processing
                 async def receive():

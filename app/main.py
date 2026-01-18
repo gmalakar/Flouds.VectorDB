@@ -40,6 +40,7 @@ from app.routers.metrics import router as metrics_router
 from app.routers.user import router as user_router
 from app.routers.vector import router as vector_router
 from app.tasks.cleanup import cleanup_connections
+from app.milvus.connection_pool import milvus_pool
 from app.utils.log_sanitizer import sanitize_for_log
 
 logger = get_logger("main")
@@ -167,6 +168,8 @@ async def lifespan(app: FastAPI):
 
     # Cancel cleanup task on shutdown
     cleanup_task.cancel()
+    # Close connection pool gracefully
+    milvus_pool.close()
     # security_watcher was removed; caching invalidation handles updates.
     if executor:
         executor.shutdown(wait=False)

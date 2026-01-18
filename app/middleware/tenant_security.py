@@ -14,95 +14,176 @@ from app.services.config_service import config_service
 logger = get_logger("tenant_security")
 
 
+class SecurityPatternMatcher:
+    """
+    Helper class for matching values against allowed patterns with support for
+    wildcards, regex, and exact matching. Used for CORS origins and trusted hosts.
+    """
+
+    @staticmethod
+    def extract_token(request: Request) -> Optional[str]:
+        """
+        Extract bearer token from Authorization header or `token` query param in dev.
+
+        Args:
+            request: The HTTP request object.
+
+        Returns:
+            The extracted bearer token, or None if not found.
+
+        Example:
+            Authorization: Bearer token123 -> returns "token123"
+        """
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            return auth_header[7:].strip()
+        if not APP_SETTINGS.app.is_production:
+            return request.query_params.get("token")
+        return None
+
+    @staticmethod
+    def match_pattern(value: Optional[str], pattern: Optional[str]) -> bool:
+        """
+        Match a value against a single allowed pattern.
+
+        Supported pattern forms:
+        - "*" matches everything
+        - entries starting with "re:" are treated as a full regular expression
+          (e.g. "re:^.*\\.example\\.com$")
+        - entries containing '*' are treated as simple wildcards where '*' -> '.*'
+          and the pattern is matched as a fullmatch against the value
+        - otherwise exact comparison is used
+
+        Args:
+            value: The value to match (e.g., hostname, origin).
+            pattern: The pattern to match against.
+
+        Returns:
+            True if value matches pattern, False otherwise.
+
+        Example:
+            >>> matcher = SecurityPatternMatcher()
+            >>> matcher.match_pattern("example.com", "*.com")
+            True
+            >>> matcher.match_pattern("api.example.com", "re:^api\\..*")
+            True
+        """
+        if pattern is None:
+            return False
+        # If value is None we cannot match against patterns
+        if value is None:
+            return False
+        if pattern == "*":
+            return True
+        if pattern.startswith("re:"):
+            try:
+                rx = pattern[3:]
+                return re.fullmatch(rx, value) is not None
+            except re.error:
+                logger.exception("Invalid regex pattern in allowed list: %s", pattern)
+                return False
+        if "*" in pattern:
+            # Special-case leading '*.' so '*.example.com' also matches 'example.com'
+            if pattern.startswith("*.") and pattern.count("*") == 1:
+                domain = pattern[2:]
+                try:
+                    regex = r"(^|.*\.)" + re.escape(domain) + r"$"
+                    return re.fullmatch(regex, value) is not None
+                except re.error:
+                    logger.exception("Wildcard to regex conversion failed for: %s", pattern)
+                    return False
+            # Escape dots and other regex meta chars, then replace '*' => '.*'
+            esc = re.escape(pattern)
+            esc = esc.replace(r"\*", ".*")
+            try:
+                return re.fullmatch(esc, value) is not None
+            except re.error:
+                logger.exception("Wildcard to regex conversion failed for: %s", pattern)
+                return False
+        return value == pattern
+
+    @staticmethod
+    def is_allowed(value: Optional[str], allowed_list: List[str]) -> bool:
+        """
+        Check if value matches any entry in allowed_list using pattern matching.
+
+        Args:
+            value: The value to check (should already be normalized).
+            allowed_list: List of allowed patterns.
+
+        Returns:
+            True if value matches any allowed pattern, False otherwise.
+        """
+        if not allowed_list:
+            return False
+        return any(
+            SecurityPatternMatcher.match_pattern(value, pattern)
+            for pattern in allowed_list
+        )
+
+    @staticmethod
+    def cors_preflight(origin_value: Optional[str]) -> Response:
+        """
+        Create a 204 preflight response with standard CORS headers.
+
+        Args:
+            origin_value: The origin to allow in CORS response.
+
+        Returns:
+            A Response with appropriate CORS headers.
+
+        Example for browser preflight:
+            OPTIONS /api/data HTTP/1.1
+            -> Returns 204 with Access-Control-Allow-Origin headers
+        """
+        allow = origin_value or "*"
+        headers = {
+            "Access-Control-Allow-Origin": allow,
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "true",
+        }
+        return Response(status_code=204, headers=headers)
+
+    @staticmethod
+    def apply_cors_headers(response: Response, origin_value: Optional[str]) -> None:
+        """
+        Append standard CORS headers to an existing response in-place.
+
+        Args:
+            response: The response object to modify.
+            origin_value: The origin to allow in CORS headers.
+        """
+        allow = origin_value or "*"
+        response.headers["Access-Control-Allow-Origin"] = allow
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+
+
+# Module-level convenience functions for backwards compatibility
 def _extract_token(request: Request) -> Optional[str]:
     """Extract bearer token from Authorization header or `token` query param in dev."""
-    auth_header = request.headers.get("Authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        return auth_header[7:].strip()
-    if not APP_SETTINGS.app.is_production:
-        return request.query_params.get("token")
-    return None
+    return SecurityPatternMatcher.extract_token(request)
 
 
 def _cors_preflight(origin_value: Optional[str]) -> Response:
     """Return a 204 preflight response with standard CORS headers for origin_value."""
-    allow = origin_value or "*"
-    headers = {
-        "Access-Control-Allow-Origin": allow,
-        "Access-Control-Allow-Methods": "*",
-        "Access-Control-Allow-Headers": "*",
-        "Access-Control-Allow-Credentials": "true",
-    }
-    return Response(status_code=204, headers=headers)
+    return SecurityPatternMatcher.cors_preflight(origin_value)
 
 
 def _apply_cors_headers(response: Response, origin_value: Optional[str]) -> None:
     """Append standard CORS headers to an existing response in-place."""
-    allow = origin_value or "*"
-    response.headers["Access-Control-Allow-Origin"] = allow
-    response.headers["Access-Control-Allow-Methods"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return SecurityPatternMatcher.apply_cors_headers(response, origin_value)
 
 
 def _match_pattern(value: Optional[str], pattern: Optional[str]) -> bool:
-    """Match a value against a single allowed pattern.
-
-    Supported pattern forms:
-    - "*" matches everything
-    - entries starting with "re:" are treated as a full regular expression
-      (e.g. "re:^.*\\.example\\.com$")
-    - entries containing '*' are treated as simple wildcards where '*' -> '.*'
-      and the pattern is matched as a fullmatch against the value
-    - otherwise exact comparison is used
-    """
-    if pattern is None:
-        return False
-    # If value is None we cannot match against patterns
-    if value is None:
-        return False
-    if pattern == "*":
-        return True
-    if pattern.startswith("re:"):
-        try:
-            rx = pattern[3:]
-            return re.fullmatch(rx, value) is not None
-        except re.error:
-            logger.exception("Invalid regex pattern in allowed list: %s", pattern)
-            return False
-    if "*" in pattern:
-        # Special-case leading '*.' so '*.example.com' also matches 'example.com'
-        if pattern.startswith("*.") and pattern.count("*") == 1:
-            domain = pattern[2:]
-            try:
-                regex = r"(^|.*\.)" + re.escape(domain) + r"$"
-                return re.fullmatch(regex, value) is not None
-            except re.error:
-                logger.exception("Wildcard to regex conversion failed for: %s", pattern)
-                return False
-        # Escape dots and other regex meta chars, then replace '*' => '.*'
-        esc = re.escape(pattern)
-        esc = esc.replace(r"\*", ".*")
-        try:
-            return re.fullmatch(esc, value) is not None
-        except re.error:
-            logger.exception("Wildcard to regex conversion failed for: %s", pattern)
-            return False
-    return value == pattern
-
+    """Match a value against a single allowed pattern."""
+    return SecurityPatternMatcher.match_pattern(value, pattern)
 
 def _is_allowed(value: Optional[str], allowed_list: List[str]) -> bool:
-    """Return True if value matches any entry in allowed_list using patterns.
-
-    `value` should already be normalized (for host: hostname only; for origin:
-    full origin string or hostname according to caller).
-    """
-    if not allowed_list:
-        return False
-    for pat in allowed_list:
-        if _match_pattern(value, pat):
-            return True
-    return False
+    """Check if value matches any entry in the allowed list using pattern matching."""
+    return SecurityPatternMatcher.is_allowed(value, allowed_list)
 
 
 class TenantTrustedHostMiddleware(BaseHTTPMiddleware):
