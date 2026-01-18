@@ -5,7 +5,7 @@
 # =============================================================================
 import time
 from contextlib import contextmanager
-from typing import Dict, Optional
+from typing import Dict, Generator, Optional
 
 from app.logger import get_logger
 
@@ -19,7 +19,7 @@ class PerformanceTracker:
         self.metrics: Dict[str, list] = {}
 
     @contextmanager
-    def track(self, operation_name: str):
+    def track(self, operation_name: str) -> Generator[None, None, None]:
         """
         Context manager for tracking operation performance.
 
@@ -56,7 +56,7 @@ class PerformanceTracker:
             return 0.0
         return sum(self.metrics[operation_name]) / len(self.metrics[operation_name])
 
-    def reset(self, operation_name: Optional[str] = None):
+    def reset(self, operation_name: Optional[str] = None) -> None:
         """
         Reset metrics for an operation or all operations.
 
@@ -70,4 +70,4 @@ class PerformanceTracker:
 
 
 # Global performance tracker instance
-perf_tracker = PerformanceTracker()
+perf_tracker: PerformanceTracker = PerformanceTracker()

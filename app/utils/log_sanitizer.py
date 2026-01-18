@@ -6,11 +6,12 @@
 
 import re
 from enum import Enum
-from typing import Any, Set
+from typing import Any
 
 
 class LogLevel(str, Enum):
     """Log level enumeration for different sensitivity levels."""
+
     DEBUG = "debug"
     INFO = "info"
     WARNING = "warning"
@@ -20,22 +21,38 @@ class LogLevel(str, Enum):
 
 # Sensitive field patterns that should be redacted in logs
 _SENSITIVE_PATTERNS = {
-    "password", "passwd", "pwd", "secret", "token", "auth",
-    "api_key", "apikey", "access_key", "private_key", "credentials",
-    "bearer", "authorization", "x-api-key", "api-key", "key",
+    "password",
+    "passwd",
+    "pwd",
+    "secret",
+    "token",
+    "auth",
+    "api_key",
+    "apikey",
+    "access_key",
+    "private_key",
+    "credentials",
+    "bearer",
+    "authorization",
+    "x-api-key",
+    "api-key",
+    "key",
 }
 
 # Fields that can be partially logged (first N chars visible)
-_PARTIAL_LOG_FIELDS = {
-    "email", "phone", "ssn", "credit_card", "tenant_code", "user_id"
-}
+_PARTIAL_LOG_FIELDS = {"email", "phone", "ssn", "credit_card", "tenant_code", "user_id"}
 
 # Audit events that should always be logged regardless of log level
 _AUDIT_EVENTS = {
-    "USER_CREATED", "USER_DELETED", "USER_MODIFIED",
-    "TENANT_CREATED", "TENANT_DELETED",
-    "DATABASE_MODIFIED", "SECURITY_POLICY_CHANGED",
-    "AUTHENTICATION_FAILED", "AUTHORIZATION_DENIED",
+    "USER_CREATED",
+    "USER_DELETED",
+    "USER_MODIFIED",
+    "TENANT_CREATED",
+    "TENANT_DELETED",
+    "DATABASE_MODIFIED",
+    "SECURITY_POLICY_CHANGED",
+    "AUTHENTICATION_FAILED",
+    "AUTHORIZATION_DENIED",
 }
 
 
@@ -80,7 +97,7 @@ def sanitize_dict_for_log(
     Returns:
         dict[str, str]: Dictionary with sanitized string values.
     """
-    result = {}
+    result: dict[str, str] = {}
     for k, v in data.items():
         key_lower = k.lower()
 
@@ -157,7 +174,7 @@ def redact_sensitive_fields(data: dict[str, Any]) -> dict[str, Any]:
     Returns:
         dict: Dictionary with sensitive fields redacted.
     """
-    result = {}
+    result: dict[str, Any] = {}
     for k, v in data.items():
         if k.lower() in _SENSITIVE_PATTERNS:
             result[k] = "[REDACTED]"
@@ -165,10 +182,8 @@ def redact_sensitive_fields(data: dict[str, Any]) -> dict[str, Any]:
             result[k] = redact_sensitive_fields(v)
         elif isinstance(v, list):
             result[k] = [
-                redact_sensitive_fields(item) if isinstance(item, dict) else item
-                for item in v
+                redact_sensitive_fields(item) if isinstance(item, dict) else item for item in v
             ]
         else:
             result[k] = v
     return result
-

@@ -5,6 +5,7 @@
 # =============================================================================
 
 import uuid
+from typing import Any, Callable
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -29,7 +30,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
     Catches and processes exceptions, returning standardized JSON error responses.
     """
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Any]) -> Response:
         """
         Intercept requests and handle exceptions, returning formatted JSON error responses.
 
@@ -63,9 +64,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
             if detail_dict:
                 error_type = detail_dict.get("error") or error_type
                 additional_info = {
-                    k: v
-                    for k, v in detail_dict.items()
-                    if k not in {"error", "message", "type"}
+                    k: v for k, v in detail_dict.items() if k not in {"error", "message", "type"}
                 }
                 if detail_dict.get("type"):
                     additional_info["type"] = detail_dict.get("type")
@@ -150,7 +149,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
                     method=request.method,
                 ),
             )
-        except (PermissionError, OSError) as e:
+        except OSError as e:
             sanitized_error = sanitize_error_message(str(e))
             logger.error(f"System error: {sanitized_error}", exc_info=True)
             return JSONResponse(

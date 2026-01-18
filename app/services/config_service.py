@@ -1,5 +1,11 @@
 # =============================================================================
 # File: config_service.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
+# =============================================================================
+# File: config_service.py
 # Date: 2026-01-02
 # =============================================================================
 import json
@@ -93,8 +99,8 @@ def _get_fernet() -> Optional[Fernet]:
     key_env = os.getenv("FLOUDS_ENCRYPTION_KEY")
     if key_env:
         try:
-            key = key_env.encode()
-            _fernet = Fernet(key)
+            key_bytes_env = key_env.encode()
+            _fernet = Fernet(key_bytes_env)
             return _fernet
         except Exception:
             logger.exception("Invalid FLOUDS_ENCRYPTION_KEY environment value")
@@ -107,18 +113,16 @@ def _get_fernet() -> Optional[Fernet]:
         key_file = os.path.join(key_dir, ".encryption_key")
         if os.path.exists(key_file):
             with safe_open_t(key_file, key_dir, "rb") as f:
-                key: bytes = f.read()
-            _fernet = Fernet(key)
+                key_bytes_file: bytes = f.read()
+            _fernet = Fernet(key_bytes_file)
             return _fernet
         # generate and persist a new key
-        key = Fernet.generate_key()
+        key_bytes_new = Fernet.generate_key()
         os.makedirs(key_dir, exist_ok=True)
         with safe_open_t(key_file, key_dir, "wb") as f:
-            f.write(key)
-        logger.info(
-            "Generated new encryption key for config at %s", sanitize_for_log(key_file)
-        )
-        _fernet = Fernet(key)
+            f.write(key_bytes_new)
+        logger.info("Generated new encryption key for config at %s", sanitize_for_log(key_file))
+        _fernet = Fernet(key_bytes_new)
         return _fernet
     except Exception:
         logger.exception("Failed to initialize encryption key for config service")
@@ -246,8 +250,7 @@ def _read_list(key: str) -> List[str]:
     try:
         val: Any = json.loads(raw)
         if isinstance(val, list):
-            val_list = cast(List[Any], val)
-            return [str(x) for x in val_list]
+            return [str(x) for x in val]
     except Exception as e:
         logger.warning(f"Invalid JSON for key {key}: {e}")
     return []
@@ -264,9 +267,7 @@ def get_cors_origins(tenant_code: str = "") -> List[str]:
     return _get_cached_list("cors_origins", tenant_code)
 
 
-def set_cors_origins(
-    origins: List[str], tenant_code: str = "", encrypted: bool = False
-) -> None:
+def set_cors_origins(origins: List[str], tenant_code: str = "", encrypted: bool = False) -> None:
     if tenant_code == "":
         if encrypted:
             _write_encrypted_kv("cors_origins", json.dumps(origins))
@@ -274,9 +275,7 @@ def set_cors_origins(
             _write_list("cors_origins", origins)
     else:
         if encrypted:
-            _write_encrypted_kv_with_tenant(
-                "cors_origins", json.dumps(origins), tenant_code
-            )
+            _write_encrypted_kv_with_tenant("cors_origins", json.dumps(origins), tenant_code)
         else:
             _write_list_with_tenant("cors_origins", origins, tenant_code)
     # refresh cache for this key/tenant
@@ -287,9 +286,7 @@ def get_trusted_hosts(tenant_code: str = "") -> List[str]:
     return _get_cached_list("trusted_hosts", tenant_code)
 
 
-def set_trusted_hosts(
-    hosts: List[str], tenant_code: str = "", encrypted: bool = False
-) -> None:
+def set_trusted_hosts(hosts: List[str], tenant_code: str = "", encrypted: bool = False) -> None:
     if tenant_code == "":
         if encrypted:
             _write_encrypted_kv("trusted_hosts", json.dumps(hosts))
@@ -297,9 +294,7 @@ def set_trusted_hosts(
             _write_list("trusted_hosts", hosts)
     else:
         if encrypted:
-            _write_encrypted_kv_with_tenant(
-                "trusted_hosts", json.dumps(hosts), tenant_code
-            )
+            _write_encrypted_kv_with_tenant("trusted_hosts", json.dumps(hosts), tenant_code)
         else:
             _write_list_with_tenant("trusted_hosts", hosts, tenant_code)
     # refresh cache for this key/tenant
@@ -313,8 +308,7 @@ def _read_list_with_tenant(key: str, tenant_code: str) -> List[str]:
     try:
         val: Any = json.loads(raw)
         if isinstance(val, list):
-            val_list = cast(List[Any], val)
-            return [str(x) for x in val_list]
+            return [str(x) for x in val]
     except Exception as e:
         logger.warning(f"Invalid JSON for key {key} tenant {tenant_code}: {e}")
     return []
@@ -326,9 +320,7 @@ def _write_list_with_tenant(key: str, items: List[str], tenant_code: str) -> Non
 
 # Generic helpers
 def get_config(key: str, tenant_code: str = "") -> Optional[str]:
-    return (
-        _read_kv(key) if tenant_code == "" else _read_kv_with_tenant(key, tenant_code)
-    )
+    return _read_kv(key) if tenant_code == "" else _read_kv_with_tenant(key, tenant_code)
 
 
 def get_config_meta(key: str, tenant_code: str = "") -> tuple[Optional[str], bool]:
@@ -357,9 +349,7 @@ def get_config_meta(key: str, tenant_code: str = "") -> tuple[Optional[str], boo
             return None, True
         return val, False
     except Exception as e:
-        logger.exception(
-            f"Failed to read key {key} tenant {tenant_code} from config DB: {e}"
-        )
+        logger.exception(f"Failed to read key {key} tenant {tenant_code} from config DB: {e}")
         return None, False
     finally:
         try:
@@ -369,9 +359,7 @@ def get_config_meta(key: str, tenant_code: str = "") -> tuple[Optional[str], boo
             pass
 
 
-def set_config(
-    key: str, value: str, tenant_code: str = "", encrypted: bool = False
-) -> None:
+def set_config(key: str, value: str, tenant_code: str = "", encrypted: bool = False) -> None:
     if tenant_code == "":
         if encrypted:
             _write_encrypted_kv(key, value)
@@ -397,9 +385,7 @@ def delete_config(key: str, tenant_code: str = "") -> None:
                 (key, tenant_code),
             )
     except Exception as e:
-        logger.exception(
-            f"Failed to delete key {key} tenant {tenant_code} from config DB: {e}"
-        )
+        logger.exception(f"Failed to delete key {key} tenant {tenant_code} from config DB: {e}")
     finally:
         try:
             if conn is not None:
@@ -441,9 +427,7 @@ def _read_kv_with_tenant(key: str, tenant_code: str) -> Optional[str]:
                 return None
         return val
     except Exception as e:
-        logger.exception(
-            f"Failed to read key {key} tenant {tenant_code} from config DB: {e}"
-        )
+        logger.exception(f"Failed to read key {key} tenant {tenant_code} from config DB: {e}")
         return None
     finally:
         try:
@@ -466,9 +450,7 @@ def _write_kv_with_tenant(key: str, value: str, tenant_code: str) -> None:
                 (key, tenant_code, value),
             )
     except Exception as e:
-        logger.exception(
-            f"Failed to write key {key} tenant {tenant_code} into config DB: {e}"
-        )
+        logger.exception(f"Failed to write key {key} tenant {tenant_code} into config DB: {e}")
     finally:
         try:
             if conn is not None:
@@ -676,29 +658,23 @@ class ConfigService:
     def set_cors_origins(
         self, origins: List[str], tenant_code: str = "", encrypted: bool = False
     ) -> None:
-        res = set_cors_origins(origins, tenant_code=tenant_code, encrypted=encrypted)
+        set_cors_origins(origins, tenant_code=tenant_code, encrypted=encrypted)
         # Invalidate class-level cache so subsequent reads reflect DB changes
         try:
             self.reset_cache()
-            _invalidate_cache_for_key(
-                "cors_origins", tenant_code if tenant_code != "" else None
-            )
+            _invalidate_cache_for_key("cors_origins", tenant_code if tenant_code != "" else None)
         except Exception:
             pass
-        return res
 
     def set_trusted_hosts(
         self, hosts: List[str], tenant_code: str = "", encrypted: bool = False
     ) -> None:
-        res = set_trusted_hosts(hosts, tenant_code=tenant_code, encrypted=encrypted)
+        set_trusted_hosts(hosts, tenant_code=tenant_code, encrypted=encrypted)
         try:
             self.reset_cache()
-            _invalidate_cache_for_key(
-                "trusted_hosts", tenant_code if tenant_code != "" else None
-            )
+            _invalidate_cache_for_key("trusted_hosts", tenant_code if tenant_code != "" else None)
         except Exception:
             pass
-        return res
 
     def get_config(self, key: str, tenant_code: str = "") -> Optional[str]:
         return get_config(key, tenant_code=tenant_code)
@@ -706,30 +682,26 @@ class ConfigService:
     def set_config(
         self, key: str, value: str, tenant_code: str = "", encrypted: bool = False
     ) -> None:
-        res = set_config(key, value, tenant_code=tenant_code, encrypted=encrypted)
+        set_config(key, value, tenant_code=tenant_code, encrypted=encrypted)
         try:
             self.reset_cache()
             _invalidate_cache_for_key(key, tenant_code if tenant_code != "" else None)
         except Exception:
             pass
-        return res
 
     def delete_config(self, key: str, tenant_code: str = "") -> None:
-        res = delete_config(key, tenant_code=tenant_code)
+        delete_config(key, tenant_code=tenant_code)
         try:
             self.reset_cache()
             _invalidate_cache_for_key(key, tenant_code if tenant_code != "" else None)
         except Exception:
             pass
-        return res
 
-    def get_config_meta(
-        self, key: str, tenant_code: str = ""
-    ) -> tuple[Optional[str], bool]:
+    def get_config_meta(self, key: str, tenant_code: str = "") -> tuple[Optional[str], bool]:
         return get_config_meta(key, tenant_code=tenant_code)
 
     def load_and_apply_settings(self) -> None:
-        return load_and_apply_settings()
+        load_and_apply_settings()
 
 
 config_service = ConfigService()

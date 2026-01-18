@@ -7,7 +7,7 @@
 import json
 import time
 from collections import defaultdict
-from typing import Optional
+from typing import Any, Callable, DefaultDict, List, Optional
 
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -27,7 +27,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     Tracks request counts and enforces limits per period.
     """
 
-    def __init__(self, app, calls: int = 100, period: int = 60):
+    def __init__(self, app: object, calls: int = 100, period: int = 60):
         """
         Initialize the RateLimitMiddleware.
 
@@ -39,10 +39,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.calls = calls
         self.period = period
-        self.clients = defaultdict(list)
-        self.tenants = defaultdict(list)
+        self.clients: DefaultDict[str, List[float]] = defaultdict(list)
+        self.tenants: DefaultDict[str, List[float]] = defaultdict(list)
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: "Callable[[Request], Any]") -> Response:
         """
         Intercept requests and enforce rate limits by tenant or IP.
 
@@ -104,9 +104,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         Returns:
             str: The tenant code if found, else None.
         """
-        if request.method in ["POST", "PUT", "PATCH"] and request.url.path.startswith(
-            "/api/v1/"
-        ):
+        if request.method in ["POST", "PUT", "PATCH"] and request.url.path.startswith("/api/v1/"):
             try:
                 body = await request.body()
                 if body:

@@ -37,14 +37,14 @@ $switchParams = @("-force", "-build-image", "-pull-always")
 
 for ($i = 0; $i -lt $args.Count; $i++) {
     $arg = $args[$i].ToLower()
-    
+
     # Check if parameter exists in valid list
     if ($arg -notin $validParams) {
         Write-Host "Error: Invalid parameter '$($args[$i])'" -ForegroundColor Red
         Write-Host "Valid parameters: $($validParams -join ', ')" -ForegroundColor Yellow
         exit 1
     }
-    
+
     # Handle parameter based on type
     if ($arg -in $switchParams) {
         # Switch parameters
@@ -181,7 +181,7 @@ function Set-DirectoryPermissions {
     else {
         Write-Success "Found $Description directory: $Path"
     }
-    
+
     # Test if directory is writable
     if (Test-DirectoryWritable -Path $Path) {
         Write-Success "$Description directory is writable: $Path"

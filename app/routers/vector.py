@@ -26,6 +26,9 @@ from app.utils.log_sanitizer import sanitize_for_log
 router: APIRouter = APIRouter()
 logger = get_logger("router")
 
+# Module-level dependency objects to avoid function-call defaults (flake8 B008)
+DB_TOKEN_DEP = Depends(get_db_token)
+
 
 def log_response(response: Union[BaseResponse, ListResponse], operation: str) -> None:
     """
@@ -59,7 +62,7 @@ def log_response(response: Union[BaseResponse, ListResponse], operation: str) ->
 @router.post("/set_vector_store", response_model=ListResponse)
 async def set_vector_store(
     request: SetVectorStoreRequest,
-    db_secret: str = Depends(get_db_token),
+    db_secret: str = DB_TOKEN_DEP,
 ) -> ListResponse:
     """
     Sets up database, user, and permissions for the given tenant.
@@ -71,9 +74,7 @@ async def set_vector_store(
     Returns:
         ListResponse: The response with tenant setup details.
     """
-    logger.debug(
-        f"set_vector_store request for tenant: {sanitize_for_log(request.tenant_code)}"
-    )
+    logger.debug(f"set_vector_store request for tenant: {sanitize_for_log(request.tenant_code)}")
     tenant_code = request.tenant_code
     if tenant_code is None:
         raise HTTPException(
@@ -92,7 +93,7 @@ async def set_vector_store(
 @router.post("/insert", response_model=BaseResponse)
 async def insert(
     request: InsertEmbeddedRequest,
-    db_secret: str = Depends(get_db_token),
+    db_secret: str = DB_TOKEN_DEP,
 ) -> BaseResponse:
     """
     Inserts embedded vectors into the model-specific collection for the given tenant.
@@ -129,7 +130,7 @@ async def insert(
 @router.post("/search", response_model=SearchEmbeddedResponse)
 async def search(
     request: SearchEmbeddedRequest,
-    db_secret: str = Depends(get_db_token),
+    db_secret: str = DB_TOKEN_DEP,
 ) -> SearchEmbeddedResponse:
     """
     Searches for embedded vectors in the model-specific collection for the given tenant.
@@ -166,7 +167,7 @@ async def search(
 @router.post("/generate_schema", response_model=ListResponse)
 async def generate_schema(
     request: GenerateSchemaRequest,
-    db_secret: str = Depends(get_db_token),
+    db_secret: str = DB_TOKEN_DEP,
 ) -> ListResponse:
     """
     Generates a custom schema for the given tenant with specified parameters.
@@ -200,7 +201,7 @@ async def generate_schema(
 async def flush_collection(
     tenant_code: str,
     model_name: str,
-    db_secret: str = Depends(get_db_token),
+    db_secret: str = DB_TOKEN_DEP,
 ) -> BaseResponse:
     """
     Manually flush a tenant's collection for immediate data persistence.

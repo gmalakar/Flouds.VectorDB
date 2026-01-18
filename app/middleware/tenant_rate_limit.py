@@ -35,9 +35,7 @@ class TenantRateLimiter:
         }
         self._lock = Lock()
 
-    def check_tenant_limit(
-        self, tenant_code: str, tier: str = "default"
-    ) -> tuple[bool, dict]:
+    def check_tenant_limit(self, tenant_code: str, tier: str = "default") -> tuple[bool, dict]:
         """
         Check if tenant has exceeded rate limit using monotonic time for reliability.
 
@@ -77,9 +75,7 @@ class TenantRateLimiter:
                     else now
                 )
                 info["retry_after"] = int(limits["period"] - (now - oldest_request)) + 1
-                logger.warning(
-                    f"Tenant rate limit exceeded: {sanitize_for_log(tenant_code)}"
-                )
+                logger.warning(f"Tenant rate limit exceeded: {sanitize_for_log(tenant_code)}")
                 return False, info
 
             # Record request

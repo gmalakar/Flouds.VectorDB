@@ -1,5 +1,11 @@
 # =============================================================================
 # File: offender_manager.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
+# =============================================================================
+# File: offender_manager.py
 # In-memory offender tracker for repeated unauthenticated requests.
 # Ported from Flouds.Py
 # =============================================================================
@@ -77,15 +83,11 @@ class OffenderManager:
                 pass
             return default
 
-        max_attempts = _val_from_config_or_env(
-            "block_max_attempts", "FLOUDS_BLOCK_MAX_ATTEMPS", 5
-        )
+        max_attempts = _val_from_config_or_env("block_max_attempts", "FLOUDS_BLOCK_MAX_ATTEMPS", 5)
         window_seconds = _val_from_config_or_env(
             "block_window_seconds", "FLOUDS_BLOCK_WINDOW_SECONDS", 60
         )
-        block_seconds = _val_from_config_or_env(
-            "block_seconds", "FLOUDS_BLOCK_SECONDS", 200
-        )
+        block_seconds = _val_from_config_or_env("block_seconds", "FLOUDS_BLOCK_SECONDS", 200)
 
         cfg = (max_attempts, window_seconds, block_seconds)
         self._tenant_block_config[t] = cfg
@@ -106,9 +108,7 @@ class OffenderManager:
         sets blocked_until and returns True.
         """
         now = time.time()
-        max_attempts, window_seconds, block_seconds = self._get_block_config_for_tenant(
-            tenant
-        )
+        max_attempts, window_seconds, block_seconds = self._get_block_config_for_tenant(tenant)
         with self._offender_lock:
             rec = self._offender_store.get(ip)
             if not rec:

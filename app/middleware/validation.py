@@ -4,6 +4,8 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 
+from typing import Any, Callable
+
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -20,7 +22,7 @@ class ValidationMiddleware(BaseHTTPMiddleware):
     Enforces maximum request size and ensures JSON content type for POST/PUT/PATCH.
     """
 
-    async def dispatch(self, request: Request, call_next) -> object:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Any]) -> Any:
         """
         Intercept requests to validate size and content type.
 
@@ -46,9 +48,7 @@ class ValidationMiddleware(BaseHTTPMiddleware):
         if request.method in ["POST", "PUT", "PATCH"]:
             content_type = request.headers.get("content-type", "")
             if not content_type.startswith("application/json"):
-                logger.warning(
-                    f"Invalid content type: {sanitize_for_log(content_type)}"
-                )
+                logger.warning(f"Invalid content type: {sanitize_for_log(content_type)}")
                 raise HTTPException(status_code=415, detail="Unsupported media type")
 
         response = await call_next(request)

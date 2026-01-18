@@ -1,5 +1,11 @@
+# =============================================================================
+# File: tenant_security.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 import re
-from typing import List, Optional
+from typing import Awaitable, Callable, List, Optional
 from urllib.parse import urlparse
 
 from fastapi import Request
@@ -116,10 +122,7 @@ class SecurityPatternMatcher:
         """
         if not allowed_list:
             return False
-        return any(
-            SecurityPatternMatcher.match_pattern(value, pattern)
-            for pattern in allowed_list
-        )
+        return any(SecurityPatternMatcher.match_pattern(value, pattern) for pattern in allowed_list)
 
     @staticmethod
     def cors_preflight(origin_value: Optional[str]) -> Response:
@@ -181,6 +184,7 @@ def _match_pattern(value: Optional[str], pattern: Optional[str]) -> bool:
     """Match a value against a single allowed pattern."""
     return SecurityPatternMatcher.match_pattern(value, pattern)
 
+
 def _is_allowed(value: Optional[str], allowed_list: List[str]) -> bool:
     """Check if value matches any entry in the allowed list using pattern matching."""
     return SecurityPatternMatcher.is_allowed(value, allowed_list)
@@ -194,7 +198,9 @@ class TenantTrustedHostMiddleware(BaseHTTPMiddleware):
     is missing. Supports wildcard patterns and regex entries (prefix `re:`).
     """
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         host = request.headers.get("host", "")
         tenant = request.headers.get("X-Tenant-Code", "")
         try:
@@ -214,13 +220,8 @@ class TenantTrustedHostMiddleware(BaseHTTPMiddleware):
                 try:
                     token = _extract_token(request)
                     if token:
-                        client = key_manager.authenticate_client(
-                            token, tenant_code=tenant or ""
-                        )
-                        if (
-                            client
-                            and getattr(client, "client_type", "") == "superadmin"
-                        ):
+                        client = key_manager.authenticate_client(token, tenant_code=tenant or "")
+                        if client and getattr(client, "client_type", "") == "superadmin":
                             logger.info(
                                 "Superadmin bypass: allowing request from host %s for tenant %s",
                                 hostname,
@@ -228,9 +229,7 @@ class TenantTrustedHostMiddleware(BaseHTTPMiddleware):
                             )
                             return await call_next(request)
                 except Exception:
-                    logger.exception(
-                        "Error checking superadmin bypass for trusted-host"
-                    )
+                    logger.exception("Error checking superadmin bypass for trusted-host")
 
                 logger.warning(
                     "Blocked request from untrusted host %s for tenant %s",
@@ -242,9 +241,7 @@ class TenantTrustedHostMiddleware(BaseHTTPMiddleware):
                 )
         except Exception:
             logger.exception("Trusted host check failed")
-            return JSONResponse(
-                status_code=500, content={"detail": "Trusted host check failed"}
-            )
+            return JSONResponse(status_code=500, content={"detail": "Trusted host check failed"})
 
         return await call_next(request)
 
@@ -258,7 +255,9 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
     This middleware handles preflight (OPTIONS) and appends appropriate CORS headers.
     """
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         tenant = request.headers.get("X-Tenant-Code", "")
         try:
             origins = config_service.get_cors_origins(tenant_code=tenant)
@@ -281,9 +280,7 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
 
             host = request.headers.get("host", "")
             host_only = (host.split(":")[0] if host else "").lower()
-            origin_host_only = (
-                origin_host.split(":")[0] if origin_host else ""
-            ).lower()
+            origin_host_only = (origin_host.split(":")[0] if origin_host else "").lower()
 
             # Consider localhost and 127.0.0.1 / [::1] equivalent for local dev
             localhost_aliases = {"localhost", "127.0.0.1", "[::1]"}
@@ -324,9 +321,7 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
 
                         trusted = config_service.get_trusted_hosts(tenant_code=tenant)
                         if not trusted:
-                            trusted = getattr(
-                                APP_SETTINGS.security, "trusted_hosts", ["*"]
-                            )
+                            trusted = getattr(APP_SETTINGS.security, "trusted_hosts", ["*"])
 
                         # If host matches any trusted-host pattern, treat as allowed
                         # only for authenticated clients (require token). This avoids
@@ -369,11 +364,7 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
                                 client = key_manager.authenticate_client(
                                     token, tenant_code=tenant or ""
                                 )
-                                if (
-                                    client
-                                    and getattr(client, "client_type", "")
-                                    == "superadmin"
-                                ):
+                                if client and getattr(client, "client_type", "") == "superadmin":
                                     logger.info(
                                         "Superadmin bypass: allowing cross-origin request from %s for tenant %s",
                                         origin_header,
@@ -385,9 +376,7 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
                                     _apply_cors_headers(response, origin_header)
                                     return response
                         except Exception:
-                            logger.exception(
-                                "Error checking superadmin bypass during CORS flow"
-                            )
+                            logger.exception("Error checking superadmin bypass during CORS flow")
 
                         logger.warning(
                             "Blocked cross-origin request from %s for tenant %s",
@@ -403,18 +392,14 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
                             },
                         )
                     except Exception:
-                        logger.exception(
-                            "Error evaluating trusted hosts during CORS check"
-                        )
+                        logger.exception("Error evaluating trusted hosts during CORS check")
                         return JSONResponse(
                             status_code=500, content={"detail": "CORS middleware error"}
                         )
 
             # Determine value to echo in Access-Control-Allow-Origin
             allow_origin = (
-                "*"
-                if (not origins or "*" in origins)
-                else origin_header or ", ".join(origins)
+                "*" if (not origins or "*" in origins) else origin_header or ", ".join(origins)
             )
 
             # Handle preflight
@@ -427,6 +412,4 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
             return response
         except Exception:
             logger.exception("CORS middleware error")
-            return JSONResponse(
-                status_code=500, content={"detail": "CORS middleware error"}
-            )
+            return JSONResponse(status_code=500, content={"detail": "CORS middleware error"})

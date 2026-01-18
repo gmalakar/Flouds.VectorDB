@@ -6,7 +6,7 @@
 import os
 import re
 from pathlib import Path
-from typing import Union
+from typing import IO, Any, Union
 
 from app.exceptions.custom_exceptions import FloudsVectorError
 
@@ -29,7 +29,6 @@ COMPILED_PATTERNS = [re.compile(pattern) for pattern in DANGEROUS_PATTERNS]
 def validate_safe_path(file_path: Union[str, Path], base_dir: Union[str, Path]) -> str:
     try:
         file_str = str(file_path)
-        base_str = str(base_dir)
         for pattern in COMPILED_PATTERNS:
             if pattern.search(file_str):
                 raise ResourceException(f"Dangerous path pattern detected: {file_str}")
@@ -40,21 +39,19 @@ def validate_safe_path(file_path: Union[str, Path], base_dir: Union[str, Path]) 
         try:
             file_path.relative_to(base_dir)
         except ValueError:
-            raise ResourceException(
-                f"Path traversal detected: {file_path} is outside {base_dir}"
-            )
+            raise ResourceException(f"Path traversal detected: {file_path} is outside {base_dir}")
         if len(str(file_path)) > 4096:
             raise ResourceException("Path too long")
         return str(file_path)
-    except (OSError, PermissionError) as e:
+    except OSError as e:
         raise ResourceException(f"Cannot access path: {e}")
     except Exception as e:
         raise ResourceException(f"Path validation failed: {e}")
 
 
 def safe_open(
-    file_path: Union[str, Path], base_dir: Union[str, Path], mode: str = "r", **kwargs
-):
+    file_path: Union[str, Path], base_dir: Union[str, Path], mode: str = "r", **kwargs: Any
+) -> IO[Any]:
     safe_path = validate_safe_path(file_path, base_dir)
     if "w" in mode or "a" in mode or "+" in mode:
         parent_dir = Path(safe_path).parent
@@ -64,5 +61,5 @@ def safe_open(
             raise ResourceException(f"No write permission for directory: {parent_dir}")
     try:
         return open(safe_path, mode, **kwargs)
-    except (IOError, OSError) as e:
+    except OSError as e:
         raise ResourceException(f"Cannot open file {safe_path}: {e}")

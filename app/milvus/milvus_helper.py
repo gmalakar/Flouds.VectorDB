@@ -107,9 +107,7 @@ class MilvusHelper(BaseMilvus):
             )
 
         # Check if collection exists
-        if not BaseMilvus._check_collection_exists(
-            request.tenant_code, request.model_name
-        ):
+        if not BaseMilvus._check_collection_exists(request.tenant_code, request.model_name):
             raise ValidationError(
                 f"Collection for tenant '{request.tenant_code}' and model '{request.model_name}' does not exist. Please run generate_schema first."
             )
@@ -200,17 +198,13 @@ class MilvusHelper(BaseMilvus):
             AuthenticationError: If token is invalid or user is not a super user.
         """
         client_id, secret_key = MilvusHelper._split_token(token)
-        logger.debug(
-            f"Setting up user for tenant '{sanitize_for_log(request.tenant_code)}'"
-        )
+        logger.debug(f"Setting up user for tenant '{sanitize_for_log(request.tenant_code)}'")
         if not BaseMilvus._validate_token(token=token):
             logger.error("Invalid database token provided")
             raise AuthenticationError("Invalid database token.")
         if not BaseMilvus._is_super_user(user_id=client_id):
             logger.error(f"User '{sanitize_for_log(client_id)}' is not a super user.")
-            raise AuthenticationError(
-                "User is not a super user to perform this operation."
-            )
+            raise AuthenticationError("User is not a super user to perform this operation.")
 
         return MilvusHelper._create_user_for_tenant(
             tenant_code=request.tenant_code,
@@ -238,17 +232,13 @@ class MilvusHelper(BaseMilvus):
             AuthenticationError: If token is invalid or user is not a super user.
         """
         client_id, secret_key = MilvusHelper._split_token(token)
-        logger.debug(
-            f"Resetting password for tenant '{sanitize_for_log(request.tenant_code)}'"
-        )
+        logger.debug(f"Resetting password for tenant '{sanitize_for_log(request.tenant_code)}'")
         if not BaseMilvus._validate_token(token=token):
             logger.error("Invalid database token provided")
             raise AuthenticationError("Invalid database token.")
         if not BaseMilvus._is_super_user(user_id=client_id):
             logger.error(f"User '{sanitize_for_log(client_id)}' is not a super user.")
-            raise AuthenticationError(
-                "User is not a super user to perform this operation."
-            )
+            raise AuthenticationError("User is not a super user to perform this operation.")
 
         return BaseMilvus._reset_admin_user_password(
             request=request,
@@ -329,9 +319,7 @@ class MilvusHelper(BaseMilvus):
                 logger.error("tenant_code is required.")
                 raise ValidationError("tenant_code is required.")
 
-            return BaseMilvus._setup_tenant_vector_store(
-                tenant_code=tenant_code, **kwargs
-            )
+            return BaseMilvus._setup_tenant_vector_store(tenant_code=tenant_code, **kwargs)
 
     @staticmethod
     def generate_schema(

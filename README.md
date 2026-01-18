@@ -2,7 +2,7 @@
 
 Flouds.VectorDB is a FastAPI-based service for managing multi-tenant vector stores using Milvus as the backend. It provides APIs for creating tenants, managing users, and storing and searching vector embeddings with metadata.
 
-**This is a new project and we are looking for collaborators!**  
+**This is a new project and we are looking for collaborators!**
 If you are interested in vector databases, FastAPI, or scalable backend systems, your contributions are welcome.
 
 ---
@@ -89,7 +89,7 @@ def set_vector_store(request: Request, body: SetVectorStoreRequest):
 
 ### appsettings.json
 
-All main configuration is handled via `app/config/appsettings.json`.  
+All main configuration is handled via `app/config/appsettings.json`.
 You can set server type, host, port, logging, and Milvus options.
 
 **Example:**
@@ -323,7 +323,7 @@ curl -X POST http://localhost:19680/api/v1/config/add \
 
 ## How to Call the API
 
-You can use `curl`, `httpie`, or any HTTP client to call the endpoints.  
+You can use `curl`, `httpie`, or any HTTP client to call the endpoints.
 All API endpoints are versioned under `/api/v1/`. Below are some example requests:
 
 ### 1. Health Check
@@ -533,7 +533,7 @@ FLOUDS_LOG_PATH=/var/log/flouds
 
 ## Logging
 
-Logs are written to the `/var/log/flouds` directory inside the container and can be mapped to your host for persistence.  
+Logs are written to the `/var/log/flouds` directory inside the container and can be mapped to your host for persistence.
 Configure log file and level in [app/config/appsettings.json](app/config/appsettings.json) or via environment variables.
 
 Examples: see [docs/USAGE_EXAMPLES.md](docs/USAGE_EXAMPLES.md#log-sanitization-and-audit) for log sanitization and audit logging helpers.
@@ -643,7 +643,7 @@ For coordinating multi-step operations with automatic rollback, see examples in 
 
 ## License
 
-Copyright (c) 2024 Goutam Malakar.  
+Copyright (c) 2024 Goutam Malakar.
 All rights reserved.
 
 ---

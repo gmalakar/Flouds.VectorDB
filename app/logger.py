@@ -53,9 +53,7 @@ def _get_or_create_logger(logger_name: str) -> logging.Logger:
     level = logging.INFO  # Default log level
     if is_production:
         log_dir = os.getenv("FLOUDS_LOG_PATH", "/flouds-vectordb/logs")
-        level = (
-            logging.DEBUG if os.getenv("APP_DEBUG_MODE", "0") == "1" else logging.INFO
-        )
+        level = logging.DEBUG if os.getenv("APP_DEBUG_MODE", "0") == "1" else logging.INFO
     else:
         # Get parent directory of app folder and create logs folder there
         current_dir = os.path.dirname(os.path.abspath(__file__))  # app folder
@@ -76,9 +74,7 @@ def _get_or_create_logger(logger_name: str) -> logging.Logger:
 
     logger.setLevel(level)
 
-    log_format = os.getenv(
-        "FLOUDS_LOG_FORMAT", "%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    log_format = os.getenv("FLOUDS_LOG_FORMAT", "%(asctime)s %(levelname)s %(name)s: %(message)s")
     formatter = logging.Formatter(log_format)
 
     # Console handler
@@ -93,7 +89,7 @@ def _get_or_create_logger(logger_name: str) -> logging.Logger:
         )
         fh.setFormatter(formatter)
         logger.addHandler(fh)
-    except (OSError, PermissionError, FileNotFoundError) as e:
+    except OSError as e:
         # If logger setup fails we cannot rely on logger; fall back to stderr prints
         print(f"Warning: Failed to create log file handler: {e}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
@@ -104,9 +100,7 @@ def _get_or_create_logger(logger_name: str) -> logging.Logger:
         )
         traceback.print_exc(file=sys.stderr)
     except Exception as e:
-        print(
-            f"Warning: Unexpected error creating log file handler: {e}", file=sys.stderr
-        )
+        print(f"Warning: Unexpected error creating log file handler: {e}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
 
     return logger

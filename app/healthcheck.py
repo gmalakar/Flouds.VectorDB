@@ -17,8 +17,10 @@
 
 import os
 import sys
-import urllib.error
-import urllib.request
+from urllib.parse import urlparse
+
+import requests
+from requests.exceptions import RequestException
 
 
 def build_healthcheck_url() -> str:
@@ -60,16 +62,28 @@ def main() -> int:
     url = build_healthcheck_url()
     timeout_s = float(os.getenv("HEALTHCHECK_TIMEOUT", "8"))
 
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    # Basic safety: only allow http(s) schemes and restrict hosts to localhost by default
+    parsed = urlparse(url)
+    allowed_schemes = {"http", "https"}
+    server_host = os.getenv("SERVER_HOST", "localhost")
+    allowed_hosts = {"localhost", "127.0.0.1", "::1", server_host}
+
+    if parsed.scheme not in allowed_schemes:
+        return 1
+
+    hostname = parsed.hostname or ""
+    if hostname not in allowed_hosts:
+        # refuse to call out to arbitrary hosts by default
+        return 1
+
+    headers = {"Accept": "application/json"}
     try:
-        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-            status = getattr(resp, "status", 200)
-            # Consider any 2xx/3xx as healthy
-            if 200 <= status < 400:
-                return 0
-            else:
-                return 1
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, Exception):
+        resp = requests.get(url, headers=headers, timeout=timeout_s)
+        status = getattr(resp, "status_code", 200)
+        if 200 <= status < 400:
+            return 0
+        return 1
+    except RequestException:
         return 1
 
 

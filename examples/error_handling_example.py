@@ -1,9 +1,16 @@
-#!/usr/bin/env python3
+# =============================================================================
+# File: error_handling_example.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 """
 Example demonstrating error handling for missing database/collection.
 Shows what happens when you try to insert/search without proper setup.
 """
 
+
+import logging
 
 # Use shared utilities
 from common import api_post

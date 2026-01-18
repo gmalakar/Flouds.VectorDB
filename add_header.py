@@ -5,7 +5,7 @@ from pathlib import Path
 HEADER = """# =============================================================================
 # File: {filename}
 # Date: {date}
-# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# Copyright (c) {year} Goutam Malakar. All rights reserved.
 # =============================================================================
 """
 
@@ -13,10 +13,12 @@ HEADER = """# ==================================================================
 def add_header_to_file(filepath):
     with open(filepath, "r", encoding="utf-8") as f:
         content = f.read()
-    if "Copyright (c) 2024 Goutam Malakar" in content:
+    # If any copyright marker is present, assume header exists
+    if "Copyright (c)" in content:
         return  # Already has header
     today = datetime.now().strftime("%Y-%m-%d")
-    header = HEADER.format(filename=Path(filepath).name, date=today)
+    year = datetime.now().year
+    header = HEADER.format(filename=Path(filepath).name, date=today, year=year)
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(header + "\n" + content)
 

@@ -23,9 +23,7 @@ class ResetPasswordRequest(BaseRequest):
     user_name: str = Field(
         ..., description="The username of the user whose password is to be reset."
     )
-    old_password: str = Field(
-        ..., description="The old password of the user to be reset."
-    )
+    old_password: str = Field(..., description="The old password of the user to be reset.")
     new_password: str = Field(..., description="The new password for the user.")
 
     @field_validator("user_name")

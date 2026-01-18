@@ -5,7 +5,7 @@
 # =============================================================================
 
 import threading
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, Optional
 
 
 class ConcurrentDict:
@@ -18,6 +18,10 @@ class ConcurrentDict:
         _dict (dict): Internal dictionary storage.
         _created_for (Any): Optional metadata for the dictionary.
     """
+
+    _lock: threading.Lock
+    _dict: Dict[Any, Any]
+    _created_for: Any
 
     def __init__(self, created_for: Any = None):
         self._lock = threading.Lock()

@@ -23,6 +23,9 @@ from app.utils.log_sanitizer import sanitize_for_log
 router = APIRouter()
 logger = get_logger("router")
 
+# Module-level dependency objects to avoid function-call defaults (flake8 B008)
+DB_TOKEN_DEP = Depends(get_db_token)
+
 
 def log_response(response: BaseResponse, operation: str) -> None:
     """
@@ -38,15 +41,13 @@ def log_response(response: BaseResponse, operation: str) -> None:
     if not response.success:
         logger.error(f"Error in {operation}: {response.message}")
     else:
-        logger.info(
-            f"{operation} successful for tenant: {sanitize_for_log(response.tenant_code)}"
-        )
+        logger.info(f"{operation} successful for tenant: {sanitize_for_log(response.tenant_code)}")
 
 
 @router.post("/set_user", response_model=ListResponse)
 async def set_user(
     request: SetUserRequest,
-    db_secret: str = Depends(get_db_token),
+    db_secret: str = DB_TOKEN_DEP,
 ) -> ListResponse:
     """
     Sets a user in the vector store for the given tenant.
@@ -57,13 +58,9 @@ async def set_user(
     Returns:
         ListResponse: The response with operation details.
     """
-    logger.debug(
-        f"set_user request for tenant: {sanitize_for_log(request.tenant_code)}"
-    )
+    logger.debug(f"set_user request for tenant: {sanitize_for_log(request.tenant_code)}")
 
-    extra_fields: Dict[str, Any] = CommonUtils.parse_extra_fields(
-        request, SetUserRequest
-    )
+    extra_fields: Dict[str, Any] = CommonUtils.parse_extra_fields(request, SetUserRequest)
     response: ListResponse = await asyncio.to_thread(
         VectorStoreService.set_user,
         request,
@@ -77,7 +74,7 @@ async def set_user(
 @router.post("/reset_password", response_model=ResetPasswordResponse)
 async def reset_password(
     request: ResetPasswordRequest,
-    db_secret: str = Depends(get_db_token),
+    db_secret: str = DB_TOKEN_DEP,
 ) -> ResetPasswordResponse:
     """
     Resets a user in the vector store for the given tenant.
@@ -88,13 +85,9 @@ async def reset_password(
     Returns:
         ResetPasswordResponse: The response with operation details.
     """
-    logger.debug(
-        f"reset_password request for tenant: {sanitize_for_log(request.tenant_code)}"
-    )
+    logger.debug(f"reset_password request for tenant: {sanitize_for_log(request.tenant_code)}")
 
-    extra_fields: Dict[str, Any] = CommonUtils.parse_extra_fields(
-        request, ResetPasswordRequest
-    )
+    extra_fields: Dict[str, Any] = CommonUtils.parse_extra_fields(request, ResetPasswordRequest)
     response: ResetPasswordResponse = await asyncio.to_thread(
         VectorStoreService.reset_password,
         request,

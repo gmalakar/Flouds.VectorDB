@@ -1,4 +1,10 @@
-import json
+# =============================================================================
+# File: test_config_service.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
+import json  # noqa: F401
 
 from app.app_init import APP_SETTINGS
 from app.services.config_service import config_service

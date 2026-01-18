@@ -1,4 +1,10 @@
-﻿# =============================================================================
+# =============================================================================
+# File: key_manager.py
+# Date: 2026-01-18
+# Copyright (c) 2026 Goutam Malakar. All rights reserved.
+# =============================================================================
+
+# =============================================================================
 # File: key_manager.py
 # Date: 2026-01-01
 # Clean KeyManager implementation
@@ -13,16 +19,30 @@ from typing import Optional, Set, Tuple
 from cryptography.fernet import Fernet
 
 from app.app_init import APP_SETTINGS
-from app.exceptions import (
-    DatabaseConnectionError,
-    DatabaseCorruptionError,
-    DecryptionError,
-)
+from app.exceptions import DatabaseConnectionError, DatabaseCorruptionError, DecryptionError
 from app.logger import get_logger
 from app.utils.log_sanitizer import sanitize_for_log
 from app.utils.path_validator import safe_open
 
 logger = get_logger("key_manager")
+
+
+# Use a module-level cached function to avoid retaining `self` on instance methods
+@lru_cache(maxsize=1000)
+def _parse_token_cached(token: str) -> Optional[Tuple[str, str]]:
+    if "|" in token:
+        try:
+            client_id, client_secret = token.split("|", 1)
+            return client_id, client_secret
+        except Exception:
+            return None
+    if ":" in token:
+        try:
+            client_id, client_secret = token.split(":", 1)
+            return client_id, client_secret
+        except Exception:
+            return None
+    return None
 
 
 class Client:
@@ -46,15 +66,21 @@ class KeyManager:
     """
 
     def __init__(self, db_path: Optional[str] = None):
-        self.db_path = db_path or getattr(
-            APP_SETTINGS.security, "clients_db_path", "/app/data/clients.db"
+        # Ensure we always end up with a str for mypy/os.path calls.
+        candidate = (
+            db_path
+            if db_path is not None
+            else getattr(APP_SETTINGS.security, "clients_db_path", "/app/data/clients.db")
         )
+        if candidate is None:
+            candidate = "/app/data/clients.db"
+        self.db_path: str = str(candidate)
         self.clients: dict[str, Client] = {}
         self._token_cache: Set[str] = set()
         self._admin_cache: Set[str] = set()
 
-        db_dir = os.path.dirname(os.path.abspath(self.db_path))
-        if db_dir and not os.path.exists(db_dir):
+        db_dir = os.path.dirname(os.path.abspath(str(self.db_path)))
+        if db_dir and not os.path.exists(str(db_dir)):
             os.makedirs(db_dir, exist_ok=True)
             logger.info("Created database directory: %s", db_dir)
 
@@ -106,14 +132,14 @@ class KeyManager:
 
                 cursor.execute(
                     """
-                    CREATE INDEX IF NOT EXISTS idx_client_type 
+                    CREATE INDEX IF NOT EXISTS idx_client_type
                     ON clients(client_type)
                 """
                 )
 
                 cursor.execute(
                     """
-                    CREATE TRIGGER IF NOT EXISTS update_client_timestamp 
+                    CREATE TRIGGER IF NOT EXISTS update_client_timestamp
                     AFTER UPDATE ON clients
                     BEGIN
                         UPDATE clients SET updated_at = CURRENT_TIMESTAMP
@@ -127,9 +153,7 @@ class KeyManager:
                     cursor.execute("PRAGMA table_info(clients)")
                     cols = [r[1] for r in cursor.fetchall()]
                     if "tenant_code" not in cols:
-                        cursor.execute(
-                            "ALTER TABLE clients ADD COLUMN tenant_code TEXT DEFAULT ''"
-                        )
+                        cursor.execute("ALTER TABLE clients ADD COLUMN tenant_code TEXT DEFAULT ''")
                 except Exception:
                     pass
 
@@ -140,10 +164,10 @@ class KeyManager:
 
     def _recover_database(self) -> None:
         logger.warning("Attempting database recovery...")
-        if os.path.exists(self.db_path):
+        if os.path.exists(str(self.db_path)):
             backup_path = f"{self.db_path}.backup"
             try:
-                if os.path.exists(backup_path):
+                if os.path.exists(str(backup_path)):
                     os.remove(backup_path)
                 os.rename(self.db_path, backup_path)
                 logger.info("Backed up corrupted database to %s", backup_path)
@@ -153,9 +177,7 @@ class KeyManager:
                     os.remove(self.db_path)
                     logger.info("Removed corrupted database: %s", self.db_path)
                 except OSError as remove_error:
-                    logger.error(
-                        "Failed to remove corrupted database: %s", str(remove_error)
-                    )
+                    logger.error("Failed to remove corrupted database: %s", str(remove_error))
 
         try:
             with self._get_connection() as conn:
@@ -174,13 +196,13 @@ class KeyManager:
                 )
                 cursor.execute(
                     """
-                    CREATE INDEX IF NOT EXISTS idx_client_type 
+                    CREATE INDEX IF NOT EXISTS idx_client_type
                     ON clients(client_type)
                 """
                 )
                 cursor.execute(
                     """
-                    CREATE TRIGGER IF NOT EXISTS update_client_timestamp 
+                    CREATE TRIGGER IF NOT EXISTS update_client_timestamp
                     AFTER UPDATE ON clients
                     BEGIN
                         UPDATE clients SET updated_at = CURRENT_TIMESTAMP
@@ -219,25 +241,10 @@ class KeyManager:
         logger.info("Generated new encryption key at %s", sanitize_for_log(key_file))
         return key
 
-    @lru_cache(maxsize=1000)
     def _parse_token(self, token: str) -> Optional[Tuple[str, str]]:
-        if "|" in token:
-            try:
-                client_id, client_secret = token.split("|", 1)
-                return client_id, client_secret
-            except Exception:
-                return None
-        if ":" in token:
-            try:
-                client_id, client_secret = token.split(":", 1)
-                return client_id, client_secret
-            except Exception:
-                return None
-        return None
+        return _parse_token_cached(token)
 
-    def authenticate_client(
-        self, token: str, tenant_code: str = ""
-    ) -> Optional[Client]:
+    def authenticate_client(self, token: str, tenant_code: str = "") -> Optional[Client]:
         try:
             # signature now supports tenant_code matching; caller may pass tenant_code via keyword
             # but to keep backward compatibility, accept tokens without tenant enforcement when tenant_code is empty
@@ -262,9 +269,7 @@ class KeyManager:
                     )
                     return None
                 return client
-            logger.debug(
-                "Client credentials do not match for %s", sanitize_for_log(client_id)
-            )
+            logger.debug("Client credentials do not match for %s", sanitize_for_log(client_id))
             return None
         except Exception as e:
             logger.error("Authentication error: %s", str(e))
@@ -299,9 +304,7 @@ class KeyManager:
 
     def any_superadmin_exists(self) -> bool:
         """Return True if any superadmin client exists in the current cache."""
-        return any(
-            getattr(c, "client_type", "") == "superadmin" for c in self.clients.values()
-        )
+        return any(getattr(c, "client_type", "") == "superadmin" for c in self.clients.values())
 
     def get_all_tokens(self) -> Set[str]:
         return set(self._token_cache)
@@ -347,7 +350,10 @@ class KeyManager:
             self._token_cache.add(token)
             if client_type in ("admin", "superadmin"):
                 self._admin_cache.add(client_id)
-            self._parse_token.cache_clear()
+            try:
+                _parse_token_cached.cache_clear()
+            except Exception:
+                pass
             logger.info(
                 "Added/updated client: %s (%s)",
                 sanitize_for_log(client_id),
@@ -357,9 +363,7 @@ class KeyManager:
         except (DatabaseConnectionError, DatabaseCorruptionError):
             return False
         except Exception as e:
-            logger.error(
-                "Failed to add client %s: %s", sanitize_for_log(client_id), str(e)
-            )
+            logger.error("Failed to add client %s: %s", sanitize_for_log(client_id), str(e))
             return False
 
     def remove_client(self, client_id: str) -> bool:
@@ -374,22 +378,23 @@ class KeyManager:
                     token = f"{client_id}|{removed_client.client_secret}"
                     self._token_cache.discard(token)
                     self._admin_cache.discard(client_id)
-                self._parse_token.cache_clear()
+                try:
+                    _parse_token_cached.cache_clear()
+                except Exception:
+                    pass
                 logger.info("Removed client: %s", sanitize_for_log(client_id))
                 return True
             return False
         except (DatabaseConnectionError, DatabaseCorruptionError):
             return False
         except Exception as e:
-            logger.error(
-                "Failed to remove client %s: %s", sanitize_for_log(client_id), str(e)
-            )
+            logger.error("Failed to remove client %s: %s", sanitize_for_log(client_id), str(e))
             return False
 
     def load_clients(self) -> None:
         try:
             self.clients = {}
-            if not os.path.exists(self.db_path):
+            if not os.path.exists(str(self.db_path)):
                 logger.info(
                     "Database file %s does not exist, will be created",
                     sanitize_for_log(self.db_path),
@@ -412,13 +417,9 @@ class KeyManager:
                         client_id = row["client_id"]
                         encrypted_secret = row["client_secret"]
                         client_type = row["client_type"]
-                        tenant_code = (
-                            row["tenant_code"] if "tenant_code" in row.keys() else ""
-                        )
+                        tenant_code = row["tenant_code"] if "tenant_code" in row.keys() else ""
                         try:
-                            client_secret = self.fernet.decrypt(
-                                encrypted_secret.encode()
-                            ).decode()
+                            client_secret = self.fernet.decrypt(encrypted_secret.encode()).decode()
                         except Exception as decrypt_error:
                             logger.error(
                                 "Failed to decrypt client secret for %s: %s",
@@ -473,15 +474,13 @@ class KeyManager:
                 cursor.execute(
                     "SELECT client_type, COUNT(*) as count FROM clients GROUP BY client_type"
                 )
-                by_type = {
-                    row["client_type"]: row["count"] for row in cursor.fetchall()
-                }
+                by_type = {row["client_type"]: row["count"] for row in cursor.fetchall()}
                 return {
                     "total_clients": total,
                     "by_type": by_type,
                     "database_size_bytes": (
-                        os.path.getsize(self.db_path)
-                        if os.path.exists(self.db_path)
+                        os.path.getsize(str(self.db_path))
+                        if os.path.exists(str(self.db_path))
                         else 0
                     ),
                 }
@@ -497,14 +496,14 @@ class KeyManager:
         self._token_cache.clear()
         self._admin_cache.clear()
         try:
-            self._parse_token.cache_clear()
+            _parse_token_cached.cache_clear()
         except Exception:
             pass
 
     def _write_admin_files(self, admin_id: str, admin_secret: str) -> None:
         from datetime import datetime
 
-        db_dir = os.path.dirname(os.path.abspath(self.db_path))
+        db_dir = os.path.dirname(os.path.abspath(str(self.db_path)))
         console_file_path = os.path.join(db_dir, "admin_console.txt")
         creds_file = os.path.join(db_dir, "admin_credentials.txt")
 
@@ -516,13 +515,9 @@ class KeyManager:
             "=== SAVE THESE CREDENTIALS ===\n",
         ]
         try:
-            with safe_open(
-                console_file_path, db_dir, "w", encoding="utf-8"
-            ) as console_file:
+            with safe_open(console_file_path, db_dir, "w", encoding="utf-8") as console_file:
                 console_file.writelines(console_contents)
-            logger.warning(
-                "Admin credentials saved to %s", sanitize_for_log(console_file_path)
-            )
+            logger.warning("Admin credentials saved to %s", sanitize_for_log(console_file_path))
         except Exception as e:
             logger.error(
                 "Failed to save admin console to %s: %s",
@@ -542,9 +537,7 @@ class KeyManager:
                 f.write(f"Authorization: Bearer {admin_id}|{admin_secret}\n")
                 f.write("\n")
                 f.write("Example:\n")
-                f.write(
-                    f'curl -H "Authorization: Bearer {admin_id}|{admin_secret}" \\\n+'
-                )
+                f.write(f'curl -H "Authorization: Bearer {admin_id}|{admin_secret}" \\\n+')
                 f.write("  http://localhost:19680/api/v1/admin/clients\n")
             logger.warning(
                 "Admin credentials saved to: %s",

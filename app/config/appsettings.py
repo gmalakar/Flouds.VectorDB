@@ -36,7 +36,7 @@ class ServerConfig(BaseModel):
     Server configuration settings.
     """
 
-    host: str = Field(default="0.0.0.0")
+    host: str = Field(default="127.0.0.1")
     port: int = Field(default=5001)
 
     @field_validator("host")
@@ -241,4 +241,3 @@ class AppSettings(BaseModel):
 
         if errors:
             raise ValueError(f"Configuration validation failed: {'; '.join(errors)}")
-

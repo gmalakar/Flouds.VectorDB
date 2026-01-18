@@ -7,7 +7,7 @@
 import time
 from unittest.mock import Mock, patch
 
-import pytest
+import pytest  # noqa: F401
 
 from app.milvus.connection_pool import MilvusConnectionPool
 
@@ -25,9 +25,7 @@ class TestMilvusConnectionPool:
         client = self.pool.get_connection("uri", "user", "pass", "db")
 
         assert client == mock_instance
-        mock_client.assert_called_once_with(
-            uri="uri", user="user", password="pass", db_name="db"
-        )
+        mock_client.assert_called_once_with(uri="uri", user="user", password="pass", db_name="db")
 
     @patch("app.milvus.connection_pool.MilvusClient")
     def test_get_connection_reuses_existing(self, mock_client):

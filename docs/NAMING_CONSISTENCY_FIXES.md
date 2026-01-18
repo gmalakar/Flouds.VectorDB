@@ -18,7 +18,7 @@ File header comments contained incorrect filenames that didn't match the actual 
 - **Issue**: Header claimed to be "embedding_request.py" but actual file was "insert_request.py"
 
 **`app/models/search_request.py`**
-- **Before**: `# File: embedding_request.py` 
+- **Before**: `# File: embedding_request.py`
 - **After**: `# File: search_request.py`
 - **Issue**: Header claimed to be "embedding_request.py" but actual file was "search_request.py"
 
@@ -48,7 +48,7 @@ Many variables used generic or unclear names that made code difficult to underst
 
 - **Before**: `client, vector_field_name, filter_expr = self._get_search_setup(request)`
 - **After**: `milvus_client, vector_field_name, model_filter_expr = self._get_search_setup(search_request)`
-- **Reason**: 
+- **Reason**:
   - "client" → "milvus_client" (more specific)
   - "filter_expr" → "model_filter_expr" (indicates what it filters)
 

@@ -38,14 +38,14 @@ SWITCH_PARAMS=("--force" "--build-image" "--pull-always")
 
 while [[ $# -gt 0 ]]; do
     param="$1"
-    
+
     # Check if parameter is valid
     if [[ ! " ${VALID_PARAMS[@]} " =~ " ${param} " ]]; then
         echo "❌ Error: Invalid parameter '$param'"
         echo "Valid parameters: ${VALID_PARAMS[*]}"
         exit 1
     fi
-    
+
     # Handle parameter based on type
     if [[ " ${SWITCH_PARAMS[@]} " =~ " ${param} " ]]; then
         # Switch parameters
@@ -119,7 +119,7 @@ test_directory_writable() {
 set_directory_permissions() {
     local path="$1"
     local description="$2"
-    
+
     if [[ ! -d "$path" ]]; then
         echo "⚠️ $description directory does not exist: $path"
         echo "Creating directory..."
@@ -131,7 +131,7 @@ set_directory_permissions() {
     else
         echo "✅ Found $description directory: $path"
     fi
-    
+
     # Test if directory is writable
     if test_directory_writable "$path"; then
         echo "✅ $description directory is writable: $path"
@@ -176,16 +176,16 @@ else
     set -o allexport
     source "$ENV_FILE"
     set +o allexport
-    
+
     # Display parsed environment variables (mask sensitive values)
     echo "Parsed environment variables:"
     while IFS='=' read -r key value; do
         # Skip empty lines and comments
         [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
-        
+
         # Remove quotes from value
         value=$(echo "$value" | sed 's/^["'\'']*//;s/["'\'']*$//')
-        
+
         # Mask likely secrets for safety when printing
         if [[ "$key" =~ (PASSWORD|SECRET|KEY|TOKEN) ]]; then
             if [[ -n "$value" ]]; then
@@ -263,10 +263,10 @@ DOCKER_ARGS=(run -d $PULL_ALWAYS --name "$INSTANCE_NAME" --network "$FLOUDS_VECT
 while IFS='=' read -r key value; do
     # Skip empty lines and comments
     [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
-    
+
     # Remove quotes from value
     value=$(echo "$value" | sed 's/^["'\'']*//;s/["'\'']*$//')
-    
+
     echo "Setting $key: $value"
     DOCKER_ARGS+=(-e "$key=$value")
 done < <(grep -v '^[[:space:]]*$' "$ENV_FILE" 2>/dev/null || true)

@@ -115,20 +115,24 @@ def format_rate_limit_response(
     Returns:
         Dict[str, Any]: Formatted rate limit error response.
     """
+    limit_info: Dict[str, Any] = {
+        "limit": limit,
+        "period": period,
+        "retry_after": retry_after,
+        "limit_type": limit_type,
+    }
+
+    if tier:
+        limit_info["tier"] = tier
+
     response = {
         "error": "Rate Limit Exceeded",
         "message": f"Too many requests. Limit: {limit} requests per {period} seconds",
         "type": "rate_limit_error",
-        "limit_info": {
-            "limit": limit,
-            "period": period,
-            "retry_after": retry_after,
-            "limit_type": limit_type,
-        },
+        "limit_info": limit_info,
     }
 
     if tier:
-        response["limit_info"]["tier"] = tier
         response["suggestion"] = "Consider upgrading your tier for higher limits"
 
     return response

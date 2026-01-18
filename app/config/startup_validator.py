@@ -44,15 +44,12 @@ def validate_startup_config() -> None:
         sys.exit(1)
     except (TypeError, AttributeError, KeyError) as e:
         logger.critical(f"Configuration structure error: {e}")
-        logger.critical(
-            "Check that all required configuration fields are properly set"
-        )
+        logger.critical("Check that all required configuration fields are properly set")
         sys.exit(1)
-    except (ImportError, ModuleNotFoundError) as e:
+    except ImportError as e:
         logger.critical(f"Module import error during validation: {e}")
         sys.exit(1)
     except Exception as e:
         logger.critical(f"Unexpected error during configuration validation: {e}")
         logger.exception("Full stack trace:")
         sys.exit(1)
-

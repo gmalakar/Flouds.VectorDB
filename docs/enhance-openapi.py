@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+# =============================================================================
+# File: enhance-openapi.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
 """
 Script to enhance FastAPI's built-in OpenAPI documentation with additional metadata.
 This script modifies the OpenAPI spec at runtime to add more detailed descriptions,
@@ -28,34 +32,34 @@ def enhance_openapi_schema(app: FastAPI) -> dict:
         version="1.0.0",
         description="""
         ## Multi-tenant Vector Database API
-        
-        Flouds Vector API provides a comprehensive solution for managing multi-tenant vector stores 
-        using Milvus as the backend. It offers advanced features for vector similarity search, 
+
+        Flouds Vector API provides a comprehensive solution for managing multi-tenant vector stores
+        using Milvus as the backend. It offers advanced features for vector similarity search,
         hybrid search capabilities, and complete tenant isolation.
-        
+
         ### Key Features
         - **Multi-tenant Architecture**: Complete data isolation between tenants
         - **Model-specific Collections**: Organize vectors by model for better performance
         - **Hybrid Search**: Combine dense and sparse vectors with RRF scoring
         - **Advanced Security**: Bearer token authentication with rate limiting
         - **Production Ready**: Connection pooling, monitoring, and health checks
-        
+
         ### Authentication
         All endpoints require Bearer token authentication:
         ```
         Authorization: Bearer username:password
         ```
-        
+
         ### Rate Limiting
         - Global: 100 requests/minute per IP
         - Per-tenant: Configurable based on tenant tier
-        
+
         ### Workflow
         1. **Setup**: Create tenant database and user with `set_vector_store`
         2. **Schema**: Generate model-specific collections with `generate_schema`
         3. **Insert**: Add vectors with metadata using `insert`
         4. **Search**: Find similar vectors with `search` (dense or hybrid)
-        
+
         ### Support
         - **Documentation**: [GitHub Repository](https://github.com/your-org/FloudsVector.Py)
         - **Issues**: [Report Issues](https://github.com/your-org/FloudsVector.Py/issues)
@@ -92,7 +96,7 @@ def enhance_openapi_schema(app: FastAPI) -> dict:
             "description"
         ] = """
         Insert embedded vectors into the model-specific collection for the given tenant.
-        
+
         **Important Notes:**
         - All vectors must use the same model name
         - Vector dimensions must be consistent within a model
@@ -131,16 +135,16 @@ def enhance_openapi_schema(app: FastAPI) -> dict:
             "description"
         ] = """
         Search for similar vectors in the model-specific collection.
-        
+
         **Search Types:**
         - **Dense Search**: Semantic similarity using vector embeddings
         - **Hybrid Search**: Combines dense vectors with BM25 sparse vectors using RRF
-        
+
         **Supported Metrics:**
         - COSINE: Cosine similarity (recommended for normalized vectors)
         - L2: Euclidean distance
         - IP: Inner product
-        
+
         **Hybrid Search Features:**
         - Text filtering with stop word handling
         - Minimum word matching requirements
@@ -184,7 +188,7 @@ def enhance_openapi_schema(app: FastAPI) -> dict:
     return app.openapi_schema
 
 
-def setup_enhanced_openapi(app: FastAPI):
+def setup_enhanced_openapi(app: FastAPI) -> None:
     """
     Setup enhanced OpenAPI documentation for the FastAPI app.
 
@@ -192,7 +196,7 @@ def setup_enhanced_openapi(app: FastAPI):
         app: FastAPI application instance
     """
 
-    def custom_openapi():
+    def custom_openapi() -> dict:
         return enhance_openapi_schema(app)
 
     app.openapi = custom_openapi

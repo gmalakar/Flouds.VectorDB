@@ -32,10 +32,10 @@ test_endpoint() {
     local data=$3
     local auth_token=$4
     local description=$5
-    
+
     echo -e "${BLUE}Testing:${NC} $description"
     echo -e "${YELLOW}$method${NC} $endpoint"
-    
+
     if [ -n "$data" ]; then
         response=$(curl -s -w "\n%{http_code}" -X "$method" \
             -H "Content-Type: application/json" \
@@ -47,12 +47,12 @@ test_endpoint() {
             -H "Authorization: Bearer $auth_token" \
             "$BASE_URL$endpoint")
     fi
-    
+
     # Extract HTTP status code (last line)
     http_code=$(echo "$response" | tail -n1)
     # Extract response body (all but last line)
     response_body=$(echo "$response" | head -n -1)
-    
+
     if [[ $http_code -ge 200 && $http_code -lt 300 ]]; then
         echo -e "${GREEN}✓ Success${NC} (HTTP $http_code)"
         echo "$response_body" | jq '.' 2>/dev/null || echo "$response_body"

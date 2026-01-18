@@ -1,6 +1,12 @@
+# =============================================================================
+# File: test_config_integration.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 from unittest.mock import Mock, patch
 
-from fastapi import status
+from fastapi import status  # noqa: F401
 from starlette.testclient import TestClient
 
 from app.services import config_service
@@ -26,9 +32,7 @@ def test_config_crud_and_header_enforcement(tmp_path, mock_app_settings):
     with (
         patch("app.main.MilvusHelper.initialize", return_value=None),
         patch("app.modules.key_manager.key_manager.load_clients", return_value=None),
-        patch(
-            "app.modules.key_manager.key_manager.get_all_tokens", return_value=["tok"]
-        ),
+        patch("app.modules.key_manager.key_manager.get_all_tokens", return_value=["tok"]),
         patch(
             "app.modules.key_manager.key_manager.authenticate_client",
             return_value=fake_client,
@@ -64,10 +68,7 @@ def test_config_crud_and_header_enforcement(tmp_path, mock_app_settings):
         )
         assert r.status_code == 200
         body = r.json()
-        assert (
-            body["value"] == '["https://a.example"]'
-            or body["value"] == '["https://a.example"]'
-        )
+        assert body["value"] == '["https://a.example"]' or body["value"] == '["https://a.example"]'
 
         # Update config
         r = client.put(

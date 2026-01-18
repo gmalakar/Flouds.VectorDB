@@ -1,9 +1,15 @@
+# =============================================================================
+# File: test_log_sanitizer.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 from app.utils.log_sanitizer import (
     LogLevel,
-    sanitize_for_log,
+    is_audit_event,
     sanitize_dict_for_log,
     sanitize_for_audit,
-    is_audit_event,
+    sanitize_for_log,
 )
 
 
@@ -15,7 +21,9 @@ def test_sanitize_for_log_removes_control_chars_and_limits_length():
 
 def test_sanitize_dict_for_log_redacts_sensitive_fields():
     original_email = "user@example.com"
-    d = sanitize_dict_for_log({"password": "p@ss", "email": original_email}, log_level=LogLevel.INFO)
+    d = sanitize_dict_for_log(
+        {"password": "p@ss", "email": original_email}, log_level=LogLevel.INFO
+    )
     assert d["password"] == "[REDACTED]"
     # Non-sensitive fields are sanitized for control chars but preserved otherwise
     assert d["email"] == sanitize_for_log(original_email, LogLevel.INFO)

@@ -4,7 +4,7 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch  # noqa: F401
 
 import pytest
 
@@ -53,9 +53,7 @@ class TestConfigValidation:
 
     @patch("app.config.validation.APP_SETTINGS")
     @patch("app.config.validation.os.getenv")
-    def test_validate_vectordb_config_missing_credentials(
-        self, mock_getenv, mock_settings
-    ):
+    def test_validate_vectordb_config_missing_credentials(self, mock_getenv, mock_settings):
         mock_settings.vectordb.endpoint = "localhost"
         mock_settings.vectordb.port = 19530
         mock_settings.vectordb.username = ""  # Missing username
@@ -74,9 +72,7 @@ class TestConfigValidation:
         mock_settings.app.debug = True  # Debug in production
         mock_settings.vectordb.password = "weak"  # Weak password
         mock_settings.vectordb.password_file = None  # No password file
-        mock_getenv.side_effect = lambda key: (
-            "weak" if key == "VECTORDB_PASSWORD" else None
-        )
+        mock_getenv.side_effect = lambda key: ("weak" if key == "VECTORDB_PASSWORD" else None)
 
         errors = _validate_security_config()
         assert len(errors) >= 2  # Debug mode and weak password

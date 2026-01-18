@@ -45,9 +45,7 @@ class ConfigLoader:
             try:
                 ConfigLoader.__appsettings.server.port = int(server_port)
             except ValueError:
-                logger.warning(
-                    f"Invalid SERVER PORT value: {server_port}; using config value"
-                )
+                logger.warning(f"Invalid SERVER PORT value: {server_port}; using config value")
 
         server_host = os.getenv("FLOUDS_HOST", os.getenv("SERVER_HOST"))
         if server_host:
@@ -109,9 +107,7 @@ class ConfigLoader:
             if os.path.isabs(v_pass_file):
                 ConfigLoader.__appsettings.vectordb.password_file = v_pass_file
             else:
-                default_dir = os.path.dirname(
-                    ConfigLoader.__appsettings.vectordb.password_file
-                )
+                default_dir = os.path.dirname(ConfigLoader.__appsettings.vectordb.password_file)
                 ConfigLoader.__appsettings.vectordb.password_file = os.path.join(
                     default_dir, v_pass_file
                 )
@@ -120,9 +116,7 @@ class ConfigLoader:
         return ConfigLoader.__appsettings
 
     @staticmethod
-    def _load_config_data(
-        config_file_name: str, check_env_file: bool = False
-    ) -> Dict[str, Any]:
+    def _load_config_data(config_file_name: str, check_env_file: bool = False) -> Dict[str, Any]:
         """
         Loads a config file and merges with environment-specific override if present.
         Performs a deep merge for nested config sections.
@@ -145,7 +139,7 @@ class ConfigLoader:
 
         logger.debug(f"Loading config from {base_path}")
 
-        def deep_update(d: Dict[str, Any], u: Dict[str, Any]):
+        def deep_update(d: Dict[str, Any], u: Dict[str, Any]) -> None:
             for k, v in u.items():
                 if isinstance(v, dict) and isinstance(d.get(k), dict):
                     deep_update(d[k], v)

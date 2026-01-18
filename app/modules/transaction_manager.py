@@ -12,7 +12,7 @@ support for coordinating multiple related database operations.
 """
 
 from contextlib import contextmanager
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Generator, List, Optional
 
 from app.logger import get_logger
 
@@ -34,10 +34,10 @@ class TransactionOperation:
 
     def __init__(
         self,
-        operation: Callable,
-        rollback_func: Optional[Callable] = None,
-        *args,
-        **kwargs,
+        operation: Callable[..., Any],
+        rollback_func: Optional[Callable[[Any], Any]] = None,
+        *args: Any,
+        **kwargs: Any,
     ):
         """
         Initialize a transaction operation.
@@ -104,10 +104,10 @@ class Transaction:
 
     def add_operation(
         self,
-        operation: Callable,
-        rollback_func: Optional[Callable] = None,
-        *args,
-        **kwargs,
+        operation: Callable[..., Any],
+        rollback_func: Optional[Callable[[Any], Any]] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """
         Add an operation to the transaction.
@@ -118,9 +118,7 @@ class Transaction:
             *args: Arguments for operation.
             **kwargs: Keyword arguments for operation.
         """
-        self.operations.append(
-            TransactionOperation(operation, rollback_func, *args, **kwargs)
-        )
+        self.operations.append(TransactionOperation(operation, rollback_func, *args, **kwargs))
 
     def execute(self) -> List[Any]:
         """
@@ -147,7 +145,7 @@ class Transaction:
             logger.info(f"Transaction '{self.name}' completed successfully")
             return results
 
-        except Exception as e:
+        except Exception:
             logger.error(f"Transaction '{self.name}' failed at operation {i + 1}, rolling back...")
             self._rollback(i)
             raise
@@ -182,7 +180,7 @@ class Transaction:
 
 
 @contextmanager
-def transactional_operation(name: str = "transaction"):
+def transactional_operation(name: str = "transaction") -> Generator["Transaction", None, None]:
     """
     Context manager for transactional operations with automatic rollback on error.
 

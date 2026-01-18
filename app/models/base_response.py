@@ -20,9 +20,7 @@ class BaseResponse(BaseModel):
         time_taken (float): The time taken to complete the operation in seconds.
     """
 
-    success: bool = Field(
-        True, description="Indicates whether the operation was successful."
-    )
+    success: bool = Field(True, description="Indicates whether the operation was successful.")
     message: str = Field(
         "Operation completed successfully.",
         description="A message providing additional information about the operation.",

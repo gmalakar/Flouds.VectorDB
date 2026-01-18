@@ -1,5 +1,5 @@
 # Development dependencies (fixed copy)
-# Install with: pip install -r requirements-dev.fixed.txt
+# Install with: pip install -r requirements-dev.txt
 -r app/requirements.txt
 pytest>=8.3.0
 pytest-cov>=6.0.0
@@ -8,3 +8,10 @@ isort>=5.13.0
 ruff>=0.8.0
 mypy>=1.13.0
 pyright
+pre-commit>=3.4.0
+flake8>=7.0.0
+flake8-bugbear>=23.12.0
+flake8-comprehensions>=3.11.0
+bandit>=1.7.5
+pbr>=5.11.0
+types-requests>=2.31.0

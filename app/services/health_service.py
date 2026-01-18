@@ -92,9 +92,7 @@ class HealthService:
             start_time = time()
             # Access the internal admin client via a guarded getattr to avoid
             # static name-mangling complaints from the type checker.
-            admin_getter = getattr(
-                MilvusHelper, "_BaseMilvus__get_internal_admin_client", None
-            )
+            admin_getter = getattr(MilvusHelper, "_BaseMilvus__get_internal_admin_client", None)
             admin_client = None
             if callable(admin_getter):
                 try:
@@ -108,9 +106,7 @@ class HealthService:
 
             # Cast admin_client to Any when calling helper to satisfy static typing.
             admin_client_any = cast(Any, admin_client)
-            if admin_client is not None and MilvusHelper.check_connection(
-                admin_client_any
-            ):
+            if admin_client is not None and MilvusHelper.check_connection(admin_client_any):
                 response_time = time() - start_time
                 try:
                     dbs = admin_client_any.list_databases()
@@ -138,9 +134,7 @@ class HealthService:
             logger.warning(f"Milvus connection error: {str(e)}")
             return "unhealthy", details
         except (ImportError, AttributeError) as e:
-            details.update(
-                {"status": "client_error", "error": "Milvus client misconfigured"}
-            )
+            details.update({"status": "client_error", "error": "Milvus client misconfigured"})
             logger.warning(f"Milvus client configuration error: {str(e)}")
             return "unhealthy", details
         except Exception as e:
@@ -177,7 +171,7 @@ class HealthService:
             else:
                 return "healthy", details
 
-        except (OSError, PermissionError) as e:
+        except OSError as e:
             logger.error(f"System resource check failed: {e}")
             return "unhealthy", {"error": "System access denied"}
         except (ImportError, AttributeError) as e:
@@ -204,18 +198,13 @@ class HealthService:
                 issues.append("Missing vectordb container name  ")
             if not APP_SETTINGS.vectordb.username:
                 issues.append("Missing vectordb username")
-            if (
-                not APP_SETTINGS.vectordb.password
-                and not APP_SETTINGS.vectordb.password_file
-            ):
+            if not APP_SETTINGS.vectordb.password and not APP_SETTINGS.vectordb.password_file:
                 issues.append("Missing vectordb password")
 
             details.update(
                 {
                     "environment": (
-                        "Production"
-                        if APP_SETTINGS.app.is_production
-                        else "Development"
+                        "Production" if APP_SETTINGS.app.is_production else "Development"
                     ),
                     "debug_mode": APP_SETTINGS.app.debug,
                     "server_host": APP_SETTINGS.server.host,
@@ -232,7 +221,7 @@ class HealthService:
         except (AttributeError, KeyError) as e:
             logger.error(f"Configuration structure error: {e}")
             return "unhealthy", {"error": "Invalid configuration structure"}
-        except (ImportError, ModuleNotFoundError) as e:
+        except ImportError as e:
             logger.error(f"Configuration module error: {e}")
             return "unhealthy", {"error": "Configuration module unavailable"}
         except Exception as e:

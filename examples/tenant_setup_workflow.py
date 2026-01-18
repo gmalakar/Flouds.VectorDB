@@ -1,4 +1,9 @@
-#!/usr/bin/env python3
+# =============================================================================
+# File: tenant_setup_workflow.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 """
 Example workflow showing the new two-step process:
 1. set_vector_store - Creates database, user, and permissions
@@ -53,13 +58,13 @@ def step1_setup_tenant():
 
             if result.get("success"):
                 results = result.get("results", {})
-                logging.info(f"📊 Setup Details:")
-                logging.info(f"   Tenant Code: {results.get('tenant_code')}")
-                logging.info(f"   Database Created: {results.get('db_created')}")
-                logging.info(f"   Role Created: {results.get('role_created')}")
-                logging.info(f"   Role Assigned: {results.get('role_assigned')}")
-                logging.info(f"   Client ID: {results.get('client_id')}")
-                logging.info(f"   New Client: {results.get('new_client_id')}")
+                logging.info("📊 Setup Details:")
+                logging.info("   Tenant Code: %s", results.get("tenant_code"))
+                logging.info("   Database Created: %s", results.get("db_created"))
+                logging.info("   Role Created: %s", results.get("role_created"))
+                logging.info("   Role Assigned: %s", results.get("role_assigned"))
+                logging.info("   Client ID: %s", results.get("client_id"))
+                logging.info("   New Client: %s", results.get("new_client_id"))
                 return True
             else:
                 logging.error(f"❌ Tenant setup failed: {result.get('message')}")
@@ -88,8 +93,8 @@ def step2_generate_schema():
     }
 
     logging.info("\n🏗️ Step 2: Generating custom schema...")
-    logging.info(f"URL: {GENERATE_SCHEMA_ENDPOINT}")
-    logging.info(f"Payload: {json.dumps(payload, indent=2)}")
+    logging.info("URL: %s", GENERATE_SCHEMA_ENDPOINT)
+    logging.info("Payload: %s", json.dumps(payload, indent=2))
 
     try:
         response = requests.post(
@@ -104,14 +109,14 @@ def step2_generate_schema():
 
             if result.get("success"):
                 results = result.get("results", {})
-                logging.info(f"📊 Schema Details:")
-                logging.info(f"   Collection Name: {results.get('collection_name')}")
-                logging.info(f"   Database Name: {results.get('db_name')}")
-                logging.info(f"   Schema Created: {results.get('schema_created')}")
-                logging.info(f"   Index Created: {results.get('index_created')}")
-                logging.info(f"   Dimension: {results.get('dimension')}")
-                logging.info(f"   Metric Type: {results.get('metric_type')}")
-                logging.info(f"   Index Type: {results.get('index_type')}")
+                logging.info("📊 Schema Details:")
+                logging.info("   Collection Name: %s", results.get("collection_name"))
+                logging.info("   Database Name: %s", results.get("db_name"))
+                logging.info("   Schema Created: %s", results.get("schema_created"))
+                logging.info("   Index Created: %s", results.get("index_created"))
+                logging.info("   Dimension: %s", results.get("dimension"))
+                logging.info("   Metric Type: %s", results.get("metric_type"))
+                logging.info("   Index Type: %s", results.get("index_type"))
                 return True
             else:
                 logging.error(f"❌ Schema generation failed: {result.get('message')}")

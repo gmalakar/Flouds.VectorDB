@@ -35,17 +35,13 @@ def get_combined_stopwords() -> Set[str]:
         nltk_stopwords = set()
 
     # Load additional stopwords from config file
-    config_path = os.path.join(
-        os.path.dirname(__file__), "..", "config", "stopwords.json"
-    )
+    config_path = os.path.join(os.path.dirname(__file__), "..", "config", "stopwords.json")
     additional_stopwords = set()
 
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
-            additional_stopwords = set(
-                word.lower() for word in config.get("additional_stopwords", [])
-            )
+            additional_stopwords = {word.lower() for word in config.get("additional_stopwords", [])}
             logger.debug(f"Loaded {len(additional_stopwords)} additional stopwords")
     except (FileNotFoundError, json.JSONDecodeError, PermissionError) as e:
         logger.warning(f"Error loading additional stopwords file: {e}")

@@ -13,10 +13,7 @@ from pydantic import Field, field_validator, model_validator
 
 from app.models.base_request import BaseRequest
 from app.models.embedded_vector import EmbeddedVector
-from app.utils.input_validator import (
-    validate_model_name,
-    validate_vector,
-)
+from app.utils.input_validator import validate_model_name, validate_vector
 
 
 class InsertEmbeddedRequest(BaseRequest):

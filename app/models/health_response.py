@@ -24,9 +24,7 @@ class HealthResponse(BaseModel):
         details (Optional[Dict[str, dict]]): Additional health check details.
     """
 
-    status: str = Field(
-        description="Overall health status: healthy, degraded, or unhealthy"
-    )
+    status: str = Field(description="Overall health status: healthy, degraded, or unhealthy")
 
     service: str = Field(description="Service name")
 

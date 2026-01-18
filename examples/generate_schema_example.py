@@ -1,4 +1,9 @@
-#!/usr/bin/env python3
+# =============================================================================
+# File: generate_schema_example.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 """
 Example usage of the GenerateSchema API endpoint.
 
@@ -47,9 +52,7 @@ def generate_schema():
         logging.info(f"URL: {API_ENDPOINT}")
         logging.info(f"Payload: {json.dumps(payload, indent=2)}")
 
-        response = requests.post(
-            API_ENDPOINT, headers=headers, json=payload, timeout=30
-        )
+        response = requests.post(API_ENDPOINT, headers=headers, json=payload, timeout=30)
 
         logging.info(f"\nResponse Status: {response.status_code}")
 
@@ -80,7 +83,7 @@ def generate_schema():
             try:
                 error_detail = response.json()
                 logging.error(f"Error Details: {json.dumps(error_detail, indent=2)}")
-            except Exception as e:
+            except Exception:
                 logging.error(f"Error Text: {response.text}", exc_info=True)
 
     except requests.exceptions.RequestException as e:

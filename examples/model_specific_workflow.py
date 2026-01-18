@@ -1,4 +1,9 @@
-#!/usr/bin/env python3
+# =============================================================================
+# File: model_specific_workflow.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 """
 Example workflow showing model-specific collections:
 1. set_vector_store - Creates tenant infrastructure
@@ -7,6 +12,8 @@ Example workflow showing model-specific collections:
 4. search - Searches in model-specific collection
 """
 
+
+import logging
 
 # Use shared utilities
 from common import api_post, print_schema_details
@@ -31,9 +38,7 @@ def setup_tenant():
     """Step 1: Setup tenant infrastructure"""
     payload = {"tenant_code": "example_tenant", "vector_dimension": 768}
     logging.info("🔧 Step 1: Setting up tenant infrastructure...")
-    status_code, result, error_text = api_post(
-        SET_VECTOR_STORE_ENDPOINT, payload, headers
-    )
+    status_code, result, error_text = api_post(SET_VECTOR_STORE_ENDPOINT, payload, headers)
     if status_code == 200 and result and result.get("success"):
         logging.info("✅ Tenant setup successful!")
         return True
@@ -57,9 +62,7 @@ def generate_schema_for_model(model_name):
         "metadata_length": 8192,
     }
     logging.info(f"🏗️ Step 2: Generating schema for model '{model_name}'...")
-    status_code, result, error_text = api_post(
-        GENERATE_SCHEMA_ENDPOINT, payload, headers
-    )
+    status_code, result, error_text = api_post(GENERATE_SCHEMA_ENDPOINT, payload, headers)
     if status_code == 200 and result and result.get("success"):
         print_schema_details(result.get("results", {}))
         collection_name = result.get("results", {}).get("collection_name")
@@ -152,9 +155,7 @@ def demonstrate_multiple_models():
             if insert_vectors_for_model(model):
                 search_vectors_for_model(model)
             else:
-                logging.warning(
-                    f"❌ Skipping search for {model} due to insertion failure"
-                )
+                logging.warning(f"❌ Skipping search for {model} due to insertion failure")
         else:
             logging.warning(f"❌ Skipping {model} due to schema generation failure")
 

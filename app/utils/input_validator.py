@@ -53,13 +53,8 @@ def validate_file_path(file_path: str, base_dir: Optional[str] = None) -> str:
         resolved_path = os.path.abspath(joined_path)
 
         # Ensure the resolved path is still within the base directory
-        if (
-            not resolved_path.startswith(base_abs + os.sep)
-            and resolved_path != base_abs
-        ):
-            raise ValueError(
-                f"Path traversal attempt detected: path must be within {base_dir}"
-            )
+        if not resolved_path.startswith(base_abs + os.sep) and resolved_path != base_abs:
+            raise ValueError(f"Path traversal attempt detected: path must be within {base_dir}")
 
         return resolved_path
     else:
@@ -91,9 +86,7 @@ def validate_tenant_code(tenant_code: str) -> str:
     # (e.g., 't1') to support common short tenant identifiers while rejecting
     # two-letter codes like 'ab'.
     if len(clean_code) == 2:
-        if not re.match(r"^[a-z0-9_]{2}$", clean_code) or not re.search(
-            r"\d", clean_code
-        ):
+        if not re.match(r"^[a-z0-9_]{2}$", clean_code) or not re.search(r"\d", clean_code):
             raise ValueError(
                 "Tenant code must be 3-50 characters, alphanumeric and underscores only"
             )

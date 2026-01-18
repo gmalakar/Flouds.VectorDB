@@ -20,6 +20,4 @@ class ListResponse(BaseResponse):
         results (dict): The dictionary containing the list of items.
     """
 
-    results: Dict[str, Any] = Field(
-        ..., description="The dictionary containing the list of items."
-    )
+    results: Dict[str, Any] = Field(..., description="The dictionary containing the list of items.")

@@ -90,24 +90,20 @@ class MilvusConnectionPool:
                         "last_used": time.time(),
                         "created": time.time(),
                     }
-                    logger.debug(
-                        f"Created new Milvus connection: {sanitize_for_log(key)}"
-                    )
+                    logger.debug("Created new Milvus connection: %s", sanitize_for_log(key))
                     return client
                 except (ConnectionError, TimeoutError) as e:
-                    logger.error(f"Connection failed to Milvus: {e}")
-                    raise ConnectionError(
-                        f"Failed to connect to Milvus at {uri}"
-                    ) from e
+                    logger.error("Connection failed to Milvus: %s", e)
+                    raise ConnectionError("Failed to connect to Milvus at %s" % uri) from e
                 except (ValueError, TypeError) as e:
-                    logger.error(f"Invalid connection parameters: {e}")
-                    raise ValueError(f"Invalid Milvus connection parameters") from e
+                    logger.error("Invalid connection parameters: %s", e)
+                    raise ValueError("Invalid Milvus connection parameters") from e
                 except (ImportError, AttributeError) as e:
-                    logger.error(f"Milvus client configuration error: {e}")
-                    raise RuntimeError(f"Milvus client misconfigured") from e
+                    logger.error("Milvus client configuration error: %s", e)
+                    raise RuntimeError("Milvus client misconfigured") from e
                 except Exception as e:
-                    logger.error(f"Unexpected error creating Milvus connection: {e}")
-                    raise RuntimeError(f"Failed to create Milvus connection") from e
+                    logger.error("Unexpected error creating Milvus connection: %s", e)
+                    raise RuntimeError("Failed to create Milvus connection") from e
             else:
                 # Remove oldest connection and create new one
                 oldest_key = min(
@@ -127,9 +123,7 @@ class MilvusConnectionPool:
                     "last_used": time.time(),
                     "created": time.time(),
                 }
-                logger.debug(
-                    f"Replaced oldest connection with: {sanitize_for_log(key)}"
-                )
+                logger.debug("Replaced oldest connection with: %s", sanitize_for_log(key))
                 return client
 
     def cleanup_expired(self) -> None:
@@ -151,7 +145,7 @@ class MilvusConnectionPool:
 
             for key in expired_keys:
                 del self.connections[key]
-                logger.debug(f"Removed expired connection: {sanitize_for_log(key)}")
+                logger.debug("Removed expired connection: %s", sanitize_for_log(key))
 
     def get_stats(self) -> dict:
         """
@@ -195,18 +189,16 @@ class MilvusConnectionPool:
                     if hasattr(client, "close"):
                         client.close()
                     closed_count += 1
-                    logger.debug(f"Closed Milvus connection: {sanitize_for_log(key)}")
+                    logger.debug("Closed Milvus connection: %s", sanitize_for_log(key))
                 except Exception as e:
-                    logger.warning(
-                        f"Error closing connection {sanitize_for_log(key)}: {e}"
-                    )
+                    logger.warning("Error closing connection %s: %s", sanitize_for_log(key), e)
                 finally:
                     # Always remove from pool even if close fails
                     if key in self.connections:
                         del self.connections[key]
 
             if closed_count > 0:
-                logger.info(f"Connection pool closed: {closed_count} connections closed")
+                logger.info("Connection pool closed: %d connections closed", closed_count)
             self.connections.clear()
 
 

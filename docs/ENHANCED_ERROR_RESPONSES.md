@@ -69,7 +69,7 @@ The original error responses had several issues:
 # Before
 "Connection failed to mongodb://admin:password123@192.168.1.100:27017/db"
 
-# After  
+# After
 "Connection failed to [REDACTED]"
 ```
 
@@ -102,7 +102,7 @@ All error responses now follow a consistent structure:
 ### 2. Validation Errors (400)
 ```json
 {
-  "error": "Validation Error", 
+  "error": "Validation Error",
   "message": "Invalid input data provided",
   "type": "validation_error",
   "details": "Field 'email' is required"
@@ -113,7 +113,7 @@ All error responses now follow a consistent structure:
 ```json
 {
   "error": "Service Unavailable",
-  "message": "Unable to connect to required services", 
+  "message": "Unable to connect to required services",
   "type": "connection_error",
   "details": "Connection timeout or failure",
   "retry_after": 30
@@ -125,7 +125,7 @@ All error responses now follow a consistent structure:
 {
   "error": "System Error",
   "message": "A system-level error occurred",
-  "type": "system_error", 
+  "type": "system_error",
   "details": "Insufficient permissions or system resource issue"
 }
 ```
@@ -144,7 +144,7 @@ All error responses now follow a consistent structure:
 ```json
 {
   "error": "Internal Server Error",
-  "message": "An unexpected error occurred", 
+  "message": "An unexpected error occurred",
   "type": "internal_error",
   "details": "Please try again later or contact support"
 }
@@ -163,7 +163,7 @@ All error responses now follow a consistent structure:
 ```python
 sensitive_patterns = [
     r'password[=:\s]*[^\s\'"]+',
-    r'token[=:\s]*[^\s\'"]+', 
+    r'token[=:\s]*[^\s\'"]+',
     r'key[=:\s]*[^\s\'"]+',
     r'secret[=:\s]*[^\s\'"]+',
     r'auth[=:\s]*[^\s\'"]+',
@@ -286,7 +286,7 @@ def test_rate_limit_response_format():
 ```python
 def test_rate_limit_middleware_response():
     # Test that rate limit responses include detailed information
-    
+
 def test_error_handler_sanitization():
     # Test that sensitive information is properly sanitized
 ```
@@ -295,7 +295,7 @@ def test_error_handler_sanitization():
 ```python
 def test_no_sensitive_data_in_responses():
     # Verify no sensitive patterns appear in error responses
-    
+
 def test_sanitization_patterns():
     # Test all sensitive data patterns are properly detected
 ```

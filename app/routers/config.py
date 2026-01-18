@@ -1,8 +1,14 @@
 # =============================================================================
 # File: config.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
+# =============================================================================
+# File: config.py
 # Date: 2026-01-02
 # =============================================================================
-from typing import Any, Dict, Optional, cast
+from typing import Any, cast
 
 from fastapi import APIRouter, Body, Header, HTTPException, Query, Request, status
 
@@ -17,6 +23,36 @@ logger = get_logger("config.router")
 
 router = APIRouter()
 
+# Move expensive/functional defaults out of function signatures to satisfy
+# flake8-bugbear B008 (no function calls in argument defaults).
+ADD_CONFIG_PAYLOAD = Body(
+    ...,
+    examples=cast(
+        Any,
+        {
+            "default": {
+                "summary": "Example payload",
+                "value": {
+                    "key": "cors_origins",
+                    "value": '["https://example.com"]',
+                    "tenant_code": "",
+                    "encrypted": False,
+                },
+            }
+        },
+    ),
+)
+UPDATE_CONFIG_PAYLOAD = Body(...)
+DELETE_CONFIG_PAYLOAD = Body(...)
+
+# Move Header and Query defaults to module-level constants to avoid B008
+TENANT_CODE_HEADER = Header("", alias="X-Tenant-Code")
+KEY_QUERY = Query(..., description="Config key (part of composite PK)")
+TENANT_CODE_QUERY = Query(
+    "",
+    description="Tenant code (part of composite PK). Empty string for default tenant",
+)
+
 
 # Router-level startup handlers are deprecated. DB initialization happens
 # in the application's lifespan handler (`app/main.py`) so this router no
@@ -26,25 +62,9 @@ router = APIRouter()
 @router.post("/add")
 def add_config(
     request: Request,
-    payload: ConfigRequest = Body(
-        ...,
-        examples=cast(
-            Any,
-            {
-                "default": {
-                    "summary": "Example payload",
-                    "value": {
-                        "key": "cors_origins",
-                        "value": '["https://example.com"]',
-                        "tenant_code": "",
-                        "encrypted": False,
-                    },
-                }
-            },
-        ),
-    ),
-    tenant_code: str = Header("", alias="X-Tenant-Code"),
-):
+    payload: ConfigRequest = ADD_CONFIG_PAYLOAD,
+    tenant_code: str = TENANT_CODE_HEADER,
+) -> dict:
     """Create a new config entry. Admins only.
 
     Payload fields:
@@ -54,13 +74,11 @@ def add_config(
       - encrypted: optional boolean (default False)
     """
     # Validate tenant match and compute effective tenant
-    client_id = getattr(request.state, "client_id", None)
-    CommonUtils.validate_tenant_match(client_id, tenant_code, payload.tenant_code or "")
+    client_id: str | None = getattr(request.state, "client_id", None)
+    CommonUtils.validate_tenant_match(client_id or "", tenant_code, payload.tenant_code or "")
     tcode = payload.tenant_code or tenant_code or request.state.tenant_code or ""
     if not client_id or not key_manager.is_admin(client_id, tcode):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     key = payload.key
     value = payload.value
@@ -80,19 +98,16 @@ def add_config(
 @router.get("/get")
 def get_config(
     request: Request,
-    key: str = Query(..., description="Config key (part of composite PK)"),
-    tenant_code: str = Query(
-        "",
-        description="Tenant code (part of composite PK). Empty string for default tenant",
-    ),
-    tenant_header: str = Header("", alias="X-Tenant-Code"),
-):
+    key: str = KEY_QUERY,
+    tenant_code: str = TENANT_CODE_QUERY,
+    tenant_header: str = TENANT_CODE_HEADER,
+) -> dict:
     """Retrieve a config value by composite primary key (key + tenant_code).
     If the stored value is encrypted, return a masked response (do not return decrypted or ciphertext).
     """
     # Validate tenant header vs query parameter when both present
-    client_id = getattr(request.state, "client_id", None)
-    CommonUtils.validate_tenant_match(client_id, tenant_header, tenant_code)
+    client_id: str | None = getattr(request.state, "client_id", None)
+    CommonUtils.validate_tenant_match(client_id or "", tenant_header, tenant_code)
     tcode = tenant_code or tenant_header or ""
     try:
         val, encrypted = config_service.get_config_meta(key, tenant_code=tcode)
@@ -117,16 +132,16 @@ def get_config(
 @router.put("/update")
 def update_config(
     request: Request,
-    payload: ConfigRequest = Body(...),
-    tenant_code: str = Header("", alias="X-Tenant-Code"),
-):
+    payload: ConfigRequest = UPDATE_CONFIG_PAYLOAD,
+    tenant_code: str = TENANT_CODE_HEADER,
+) -> dict:
     """Update an existing config entry. Admins only.
 
     Payload must include `key` and `tenant_code` (composite PK), plus `value` and optional `encrypted`.
     """
     # Validate tenant header vs payload and compute effective tenant
-    client_id = getattr(request.state, "client_id", None)
-    CommonUtils.validate_tenant_match(client_id, tenant_code, payload.tenant_code or "")
+    client_id: str | None = getattr(request.state, "client_id", None)
+    CommonUtils.validate_tenant_match(client_id or "", tenant_code, payload.tenant_code or "")
     key = payload.key
     tcode = (
         payload.tenant_code
@@ -142,9 +157,7 @@ def update_config(
         raise HTTPException(status_code=400, detail="Missing tenant_code in payload")
 
     if not client_id or not key_manager.is_admin(client_id, tcode):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     try:
         config_service.set_config(key, str(value), tenant_code=tcode, encrypted=enc)
@@ -157,14 +170,14 @@ def update_config(
 @router.delete("/delete")
 def delete_config(
     request: Request,
-    payload: DeleteConfigRequest = Body(...),
-    tenant_code: str = Header("", alias="X-Tenant-Code"),
-):
+    payload: DeleteConfigRequest = DELETE_CONFIG_PAYLOAD,
+    tenant_code: str = TENANT_CODE_HEADER,
+) -> dict:
     """Delete a config entry by composite PK. Payload must include `key` and `tenant_code`.
     Admins only.
     """
-    client_id = getattr(request.state, "client_id", None)
-    CommonUtils.validate_tenant_match(client_id, tenant_code, payload.tenant_code or "")
+    client_id: str | None = getattr(request.state, "client_id", None)
+    CommonUtils.validate_tenant_match(client_id or "", tenant_code, payload.tenant_code or "")
     key = payload.key
     tcode = (
         payload.tenant_code
@@ -178,9 +191,7 @@ def delete_config(
         raise HTTPException(status_code=400, detail="Missing tenant_code in payload")
 
     if not client_id or not key_manager.is_admin(client_id, tcode):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     try:
         config_service.delete_config(key, tenant_code=tcode)

@@ -1,3 +1,9 @@
+# =============================================================================
+# File: test_connection_pool_close.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 from app.milvus.connection_pool import MilvusConnectionPool
 
 

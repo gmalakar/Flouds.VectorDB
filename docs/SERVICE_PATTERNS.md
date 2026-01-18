@@ -17,7 +17,7 @@ def my_service_method(request: MyRequest, token: str, **kwargs):
         # Perform business logic here
         response.results = perform_operation(request, token, **kwargs)
         return response
-    
+
     return (response_obj, main_logic)
 ```
 
@@ -59,7 +59,7 @@ def insert_with_flush(requests: InsertRequest, token: str, **kwargs):
                 request=requests,
                 token=token
             )
-            
+
             # Add flush operation with rollback
             txn.add_operation(
                 MilvusHelper.flush_collection,
@@ -68,12 +68,12 @@ def insert_with_flush(requests: InsertRequest, token: str, **kwargs):
                 model_name=requests.model,
                 token=token
             )
-            
+
             results = txn.execute()
             response.results = {"inserted": results[0], "flushed": True}
-        
+
         return response
-    
+
     return (BaseResponse(...), main_logic)
 ```
 
@@ -96,7 +96,7 @@ with transactional_operation("my_operation") as txn:
         arg1, arg2,
         kwarg1="value"
     )
-    
+
     # Execute all operations
     results = txn.execute()  # Returns list of results
 ```
@@ -121,13 +121,13 @@ with transactional_operation("create_and_index") as txn:
         delete_collection,
         collection_name="users"
     )
-    
+
     txn.add_operation(
         create_index,
         recreate_collection,
         collection_name="users"
     )
-    
+
     txn.execute()  # Auto-rollback on error
 ```
 
@@ -294,7 +294,7 @@ from app.config.appsettings import ServerConfig
 
 class ServerConfig(BaseModel):
     port: int = Field(default=5001)
-    
+
     @field_validator("port")
     @classmethod
     def validate_port(cls, v: int) -> int:

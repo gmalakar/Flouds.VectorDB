@@ -74,21 +74,21 @@ Use Google-style docstrings for all functions, methods, and classes:
 def function_name(param1: str, param2: int = 10) -> bool:
     """
     Brief description of what the function does.
-    
+
     Longer description if needed, explaining the purpose, behavior,
     and any important implementation details.
-    
+
     Args:
         param1 (str): Description of first parameter
         param2 (int, optional): Description of second parameter. Defaults to 10.
-        
+
     Returns:
         bool: Description of return value
-        
+
     Raises:
         ValueError: When parameter validation fails
         ConnectionError: When database connection fails
-        
+
     Example:
         >>> result = function_name("test", 5)
         >>> print(result)
@@ -119,16 +119,16 @@ def search_vectors(
 ) -> List[Dict[str, Any]]:
     """
     Search for similar vectors using specified parameters.
-    
+
     Args:
         query (List[float]): Query vector for similarity search
         limit (int, optional): Maximum results to return. Range: 1-100. Defaults to 10.
         threshold (float, optional): Minimum similarity score. Range: 0.0-1.0. Defaults to 0.0.
         metric (str, optional): Distance metric. Options: 'L2', 'IP', 'COSINE'. Defaults to 'COSINE'.
-        
+
     Returns:
         List[Dict[str, Any]]: List of search results with scores and metadata
-        
+
     Raises:
         ValueError: If query vector is empty or invalid
         VectorStoreError: If search operation fails
@@ -142,14 +142,14 @@ def search_vectors(
 class VectorStoreService:
     """
     Service class for vector store operations.
-    
+
     Provides high-level business logic for vector store management including
     user management, tenant setup, data insertion, and similarity search.
     All methods are class methods for stateless operation.
-    
+
     Attributes:
         None (all methods are class methods)
-        
+
     Example:
         >>> response = VectorStoreService.search_in_vector_store(request, token)
         >>> print(response.success)
@@ -176,14 +176,14 @@ class SearchRequest(BaseModel):
         le=100,
         description="Maximum number of search results to return. Range: 1-100, default: 10."
     )
-    
+
     score_threshold: float = Field(
         0.0,
         ge=0.0,
         le=1.0,
         description="Minimum similarity score threshold for results. Range: 0.0-1.0, default: 0.0."
     )
-    
+
     metric_type: str = Field(
         "COSINE",
         description="Distance metric for similarity calculation. Options: 'L2', 'IP', 'COSINE'. Default: 'COSINE'."
@@ -243,7 +243,7 @@ Document all custom exceptions with clear descriptions:
 class VectorStoreError(FloudsVectorError):
     """
     Raised when vector store operations fail.
-    
+
     This exception indicates issues with vector database operations
     such as insertion, search, or collection management failures.
     """
@@ -305,16 +305,16 @@ async def search_vectors(
 ) -> SearchResponse:
     """
     Search for similar vectors in the vector store.
-    
+
     Performs similarity search using dense vectors with optional hybrid search
     combining keyword filtering for improved relevance.
-    
+
     - **tenant_code**: Tenant identifier for multi-tenant isolation
     - **vector**: Query vector for similarity search
     - **limit**: Maximum number of results (1-100)
     - **metric_type**: Distance metric (L2, IP, COSINE)
     - **hybrid_search**: Enable keyword-based filtering
-    
+
     Returns search results with similarity scores and metadata.
     """
 ```

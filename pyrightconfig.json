@@ -4,7 +4,6 @@
     "pythonVersion": "3.12",
     "typeCheckingMode": "basic",
 
-    // Allow Pyright to show missing imports instead of hanging
     "reportMissingImports": true,
     "reportOptionalMemberAccess": true,
 
@@ -19,7 +18,6 @@
         "tests/**"
     ],
 
-    // Only analyze your application code
     "include": [
         "app/**"
     ]

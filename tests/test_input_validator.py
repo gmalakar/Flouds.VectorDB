@@ -7,14 +7,9 @@
 import pytest
 
 from app.utils.input_validator import (
-    sanitize_text_input,
     validate_file_path,
-    validate_limit,
     validate_model_name,
-    validate_offset,
-    validate_score_threshold,
     validate_tenant_code,
-    validate_user_id,
     validate_vector,
     validate_vector_dimension,
 )

@@ -161,7 +161,7 @@ delete() {
     echo "Data path: $DATA_PATH"
     echo "Config files: $ETCD_CONFIG, $USER_CONFIG"
     read -p "Are you sure you want to continue? (yes/no): " confirmation
-    
+
     if [[ "$confirmation" == "yes" ]]; then
         delete_container
         if [[ -n "$CONFIG_PATH" ]]; then

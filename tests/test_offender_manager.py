@@ -1,4 +1,10 @@
-import os
+# =============================================================================
+# File: test_offender_manager.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
+import os  # noqa: F401
 import time
 
 from app.modules.offender_manager import OffenderManager

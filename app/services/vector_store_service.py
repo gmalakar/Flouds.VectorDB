@@ -8,7 +8,6 @@
 # =============================================================================
 
 
-import re
 from functools import wraps
 from time import time
 from typing import Any, Callable, Tuple, TypeVar, Union, cast
@@ -101,25 +100,30 @@ def service_method(
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             start_time = time()
-            returned = func(*args, **kwargs)
+            returned: Any = func(*args, **kwargs)
             if isinstance(returned, tuple) and len(returned) == 2:
-                response, main_logic = returned  # type: ignore[list-item]
+                response, main_logic = returned
             else:
-                response = returned  # type: ignore[assignment]
-                main_logic = lambda r: r  # type: ignore[assignment]
+                response = returned
+
+                def _identity(r: Any) -> Any:
+                    return r
+
+                main_logic = _identity
+
             response_any = cast(Any, response)
             try:
-                return_value = main_logic(response)
+                # Execute main logic; main_logic may mutate `response_any`.
+                main_logic(response_any)
             except Exception as e:
                 _handle_service_exception(response_any, e)
             finally:
                 response_any.time_taken = time() - start_time
-                logger.debug(
-                    f"{func.__name__} completed in {response_any.time_taken:.2f} seconds."
-                )
-                return response_any
+                logger.debug(f"{func.__name__} completed in {response_any.time_taken:.2f} seconds.")
+
+            return response_any
 
         return cast(Callable[..., Any], wrapper)
 
@@ -147,9 +151,7 @@ class VectorStoreService:
     )
     def set_user(
         cls, request: SetUserRequest, token: str, **kwargs: Any
-    ) -> Union[
-        ListResponse, Tuple[ListResponse, Callable[[ListResponse], ListResponse]]
-    ]:
+    ) -> Union[ListResponse, Tuple[ListResponse, Callable[[ListResponse], ListResponse]]]:
         """
         Set a user in the vector store.
 
@@ -162,13 +164,11 @@ class VectorStoreService:
             ListResponse: Response object with operation result.
         """
 
-        def main_logic(response: ListResponse):
+        def main_logic(response: ListResponse) -> ListResponse:
             logger.debug(
                 f"User set request: {sanitize_for_log(request.tenant_code)}, kwargs: {kwargs}"
             )
-            response.results = MilvusHelper.set_user(
-                request=request, token=token, **kwargs
-            )
+            response.results = MilvusHelper.set_user(request=request, token=token, **kwargs)
             response.message = response.results.get("message", "User set successfully.")
             return response
 
@@ -196,9 +196,7 @@ class VectorStoreService:
             results={},
         )
     )
-    def reset_password(
-        cls, request: ResetPasswordRequest, token: str, **kwargs: Any
-    ) -> Union[
+    def reset_password(cls, request: ResetPasswordRequest, token: str, **kwargs: Any) -> Union[
         ResetPasswordResponse,
         Tuple[
             ResetPasswordResponse,
@@ -217,7 +215,7 @@ class VectorStoreService:
             ResetPasswordResponse: Response object with operation result.
         """
 
-        def main_logic(response: ResetPasswordResponse):
+        def main_logic(response: ResetPasswordResponse) -> ResetPasswordResponse:
             logger.debug(
                 f"Password reset request: {sanitize_for_log(request.tenant_code)}, kwargs: {kwargs}"
             )
@@ -254,9 +252,7 @@ class VectorStoreService:
     )
     def set_vector_store(
         cls, requests: SetVectorStoreRequest, token: str, **kwargs: Any
-    ) -> Union[
-        ListResponse, Tuple[ListResponse, Callable[[ListResponse], ListResponse]]
-    ]:
+    ) -> Union[ListResponse, Tuple[ListResponse, Callable[[ListResponse], ListResponse]]]:
         """
         Set up a vector store for a tenant.
 
@@ -269,7 +265,7 @@ class VectorStoreService:
             ListResponse: Response object with operation result.
         """
 
-        def main_logic(response: ListResponse):
+        def main_logic(response: ListResponse) -> ListResponse:
             logger.debug(f"set_vector_store: kwargs received: {kwargs}")
             response.results = MilvusHelper.set_vector_store(
                 tenant_code=(requests.tenant_code or ""), token=token, **kwargs
@@ -299,9 +295,7 @@ class VectorStoreService:
     )
     def insert_into_vector_store(
         cls, requests: InsertEmbeddedRequest, token: str, **kwargs: Any
-    ) -> Union[
-        BaseResponse, Tuple[BaseResponse, Callable[[BaseResponse], BaseResponse]]
-    ]:
+    ) -> Union[BaseResponse, Tuple[BaseResponse, Callable[[BaseResponse], BaseResponse]]]:
         """
         Insert data into the vector store.
 
@@ -314,16 +308,14 @@ class VectorStoreService:
             BaseResponse: Response object with operation result.
         """
 
-        def main_logic(response: BaseResponse):
+        def main_logic(response: BaseResponse) -> BaseResponse:
             logger.debug(f"Insert request: {sanitize_for_log(requests.tenant_code)}")
             num_inserted = MilvusHelper.insert_embedded_data(
                 request=requests, token=token, **kwargs
             )
             batch_size = len(requests.data)
             flush_status = (
-                "auto-flushed"
-                if batch_size >= 100 or kwargs.get("force_flush")
-                else "deferred"
+                "auto-flushed" if batch_size >= 100 or kwargs.get("force_flush") else "deferred"
             )
             response.message = f"Vector store inserted successfully. {num_inserted} vectors inserted ({flush_status})."
             return response
@@ -351,9 +343,7 @@ class VectorStoreService:
     )
     def flush_vector_store(
         cls, tenant_code: str, model_name: str, token: str
-    ) -> Union[
-        BaseResponse, Tuple[BaseResponse, Callable[[BaseResponse], BaseResponse]]
-    ]:
+    ) -> Union[BaseResponse, Tuple[BaseResponse, Callable[[BaseResponse], BaseResponse]]]:
         """
         Flush a tenant's collection in the vector store.
 
@@ -366,7 +356,7 @@ class VectorStoreService:
             BaseResponse: Response object with operation result.
         """
 
-        def main_logic(response: BaseResponse):
+        def main_logic(response: BaseResponse) -> BaseResponse:
             success = MilvusHelper.flush_tenant_collection(
                 tenant_code=tenant_code, model_name=model_name, token=token
             )
@@ -433,7 +423,7 @@ class VectorStoreService:
             SearchEmbeddedResponse: Response object with search results.
         """
 
-        def main_logic(response: SearchEmbeddedResponse):
+        def main_logic(response: SearchEmbeddedResponse) -> SearchEmbeddedResponse:
             logger.debug(f"Search request: {sanitize_for_log(requests.tenant_code)}")
             search_results = MilvusHelper.search_embedded_data(
                 request=requests, token=token, **kwargs
@@ -483,9 +473,7 @@ class VectorStoreService:
     )
     def generate_schema(
         cls, request: GenerateSchemaRequest, token: str, **kwargs: Any
-    ) -> Union[
-        ListResponse, Tuple[ListResponse, Callable[[ListResponse], ListResponse]]
-    ]:
+    ) -> Union[ListResponse, Tuple[ListResponse, Callable[[ListResponse], ListResponse]]]:
         """
         Generate a custom schema for a tenant's collection.
 
@@ -498,7 +486,7 @@ class VectorStoreService:
             ListResponse: Response object with operation result.
         """
 
-        def main_logic(response: ListResponse):
+        def main_logic(response: ListResponse) -> ListResponse:
             logger.debug(
                 f"Generate schema request: {sanitize_for_log(request.tenant_code)}, model_name: {sanitize_for_log(request.model_name)}"
             )

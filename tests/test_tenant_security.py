@@ -1,8 +1,13 @@
+# =============================================================================
+# File: test_tenant_security.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.middleware import tenant_security
 from app.middleware.tenant_security import (
     TenantCorsMiddleware,
     TenantTrustedHostMiddleware,

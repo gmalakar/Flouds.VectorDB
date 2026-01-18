@@ -1,4 +1,10 @@
-import pytest
+# =============================================================================
+# File: test_cors_helpers.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
+import pytest  # noqa: F401
 from starlette.responses import Response
 
 from app.middleware.tenant_security import _apply_cors_headers, _cors_preflight

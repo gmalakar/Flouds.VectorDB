@@ -12,7 +12,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from types import FrameType
-from typing import Dict, List, Optional
+from typing import AsyncGenerator, Dict, List, Optional
 
 from fastapi import Depends, FastAPI
 from fastapi.responses import Response
@@ -27,11 +27,9 @@ from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.middleware.metrics import MetricsMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_logging import RequestLoggingMiddleware
-from app.middleware.tenant_security import (
-    TenantCorsMiddleware,
-    TenantTrustedHostMiddleware,
-)
+from app.middleware.tenant_security import TenantCorsMiddleware, TenantTrustedHostMiddleware
 from app.middleware.validation import ValidationMiddleware
+from app.milvus.connection_pool import milvus_pool
 from app.milvus.milvus_helper import MilvusHelper
 from app.routers.admin import router as admin_router
 from app.routers.config import router as config_router
@@ -40,7 +38,6 @@ from app.routers.metrics import router as metrics_router
 from app.routers.user import router as user_router
 from app.routers.vector import router as vector_router
 from app.tasks.cleanup import cleanup_connections
-from app.milvus.connection_pool import milvus_pool
 from app.utils.log_sanitizer import sanitize_for_log
 
 logger = get_logger("main")
@@ -50,7 +47,7 @@ API_PREFIX = f"/api/{API_VERSION}"
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     Application lifespan manager for startup and shutdown operations.
 
@@ -95,9 +92,7 @@ async def lifespan(app: FastAPI):
             logger.error(f"Unexpected error during Milvus initialization: {str(e)}")
             sys.exit("Failed to initialize Milvus connection. Exiting application.")
     else:
-        logger.warning(
-            "VectorDB configuration is not set. Skipping Milvus initialization."
-        )
+        logger.warning("VectorDB configuration is not set. Skipping Milvus initialization.")
         sys.exit("VectorDB configuration is not set. Exiting application.")
 
     # Start background cleanup task
@@ -154,9 +149,7 @@ async def lifespan(app: FastAPI):
                     # No seeding/override requested — apply whatever is in DB
                     config_service.load_and_apply_settings()
         except Exception:
-            logger.exception(
-                "Failed to seed/override config from env; falling back to DB values"
-            )
+            logger.exception("Failed to seed/override config from env; falling back to DB values")
 
         # Caching in `config_service` keeps tenant-scoped CORS and TrustedHost
         # values fresh on writes. Periodic DB polling is no longer required.
@@ -252,9 +245,7 @@ def signal_handler(signum: int, frame: Optional[FrameType]) -> None:
         signum (int): Signal number received
         frame: Current stack frame (unused)
     """
-    logger.info(
-        f"Received signal {sanitize_for_log(signum)}, shutting down gracefully..."
-    )
+    logger.info(f"Received signal {sanitize_for_log(signum)}, shutting down gracefully...")
     sys.exit(0)
 
 
@@ -294,7 +285,7 @@ if __name__ == "__main__":
         run_server()
     except KeyboardInterrupt:
         logger.info("Application stopped by user")
-    except (OSError, PermissionError) as e:
+    except OSError as e:
         logger.error(f"Server startup error: {str(e)}")
         sys.exit(1)
     except (ValueError, TypeError, AttributeError) as e:

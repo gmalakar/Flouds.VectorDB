@@ -4,11 +4,6 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 
-from unittest.mock import Mock
-
-import pytest
-from fastapi import HTTPException
-
 from app.middleware.tenant_rate_limit import TenantRateLimiter
 
 
@@ -23,9 +18,9 @@ class TestTenantRateLimiter:
 
     def test_check_tenant_limit_allows_requests(self):
         allowed, info = self.limiter.check_tenant_limit("tenant1")
-        assert allowed == True
+        assert allowed
         allowed, info = self.limiter.check_tenant_limit("tenant1")
-        assert allowed == True
+        assert allowed
 
     def test_check_tenant_limit_blocks_excess(self):
         # Use up the limit
@@ -34,25 +29,25 @@ class TestTenantRateLimiter:
 
         # Third request should be blocked
         allowed, info = self.limiter.check_tenant_limit("tenant1")
-        assert allowed == False
+        assert not allowed
 
     def test_premium_tier_higher_limit(self):
         # Premium tier allows more requests
-        for i in range(5):
+        for _ in range(5):
             allowed, info = self.limiter.check_tenant_limit("tenant1", "premium")
-            assert allowed == True
+            assert allowed
 
         # Sixth request should be blocked
         allowed, info = self.limiter.check_tenant_limit("tenant1", "premium")
-        assert allowed == False
+        assert not allowed
 
     def test_different_tenants_separate_limits(self):
         # Each tenant has separate limits
         allowed, info = self.limiter.check_tenant_limit("tenant1")
-        assert allowed == True
+        assert allowed
         allowed, info = self.limiter.check_tenant_limit("tenant2")
-        assert allowed == True
+        assert allowed
         allowed, info = self.limiter.check_tenant_limit("tenant1")
-        assert allowed == True
+        assert allowed
         allowed, info = self.limiter.check_tenant_limit("tenant2")
-        assert allowed == True
+        assert allowed

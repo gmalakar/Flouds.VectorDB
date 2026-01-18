@@ -22,10 +22,10 @@ param(
     [Parameter(Mandatory=$true)]
     [ValidateSet("start", "stop", "restart", "remove", "delete")]
     [string]$Command,
-    
+
     [Parameter(Mandatory=$false)]
     [string]$DataPath,
-    
+
     [Parameter(Mandatory=$false)]
     [string]$ConfigPath
 )
@@ -49,7 +49,7 @@ function Create-Configs {
     if (!(Test-Path $ConfigPath)) {
         New-Item -ItemType Directory -Path $ConfigPath -Force | Out-Null
     }
-    
+
     if (!(Test-Path $EtcdConfig)) {
         @"
 listen-client-urls: http://0.0.0.0:2379
@@ -60,7 +60,7 @@ auto-compaction-retention: '1000'
 "@ | Out-File -FilePath $EtcdConfig -Encoding UTF8
         Write-Host "Created etcd config file"
     }
-    
+
     if (!(Test-Path $UserConfig)) {
         "# Extra config to override default milvus.yaml" | Out-File -FilePath $UserConfig -Encoding UTF8
         Write-Host "Created user config file"
@@ -80,16 +80,16 @@ function Start-Milvus {
         Write-Host "Milvus is already running"
         return
     }
-    
+
     $containerExists = docker ps -a | Select-String $ContainerName
     if ($containerExists) {
         docker start $ContainerName | Out-Null
     } else {
         Create-Configs
         Ensure-Network
-        
+
         if (!(Test-Path $DataPath)) { New-Item -ItemType Directory -Path $DataPath -Force | Out-Null }
-        
+
         # Convert Windows paths to Docker-compatible paths
         function Convert-ToDockerPath($path) {
             $fullPath = (Resolve-Path $path).Path
@@ -100,10 +100,10 @@ function Start-Milvus {
             }
             return $fullPath -replace '\\', '/'
         }
-        
+
         $DockerDataPath = $DataPath
         $DockerConfigPath = $ConfigPath
-        
+
         Write-Host "Using paths:"
         Write-Host "  Data: $DockerDataPath"
         Write-Host "  Config: $DockerConfigPath"
@@ -129,13 +129,13 @@ function Start-Milvus {
             milvusdb/milvus:v2.5.5 `
             milvus run standalone
     }
-    
+
     Write-Host "Waiting for Milvus to become healthy..."
     do {
         Start-Sleep -Seconds 1
         $healthy = docker ps | Select-String "$ContainerName.*healthy"
     } while (!$healthy)
-    
+
     Write-Host "Milvus started successfully"
 }
 
@@ -164,7 +164,7 @@ function Delete-Milvus {
     Write-Host "Data path: $DataPath"
     Write-Host "Config files: $EtcdConfig, $UserConfig"
     $confirmation = Read-Host "Are you sure you want to continue? (yes/no)"
-    
+
     if ($confirmation -eq "yes") {
         Remove-Container
         if (Test-Path $EtcdConfig) { Remove-Item $EtcdConfig -Force }

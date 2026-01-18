@@ -193,10 +193,10 @@ def _assign_role_to_tenant_user(...) -> None
 ```python
 def test_validate_password_policy():
     # Test password validation logic
-    
+
 def test_load_password_from_file():
     # Test file-based password loading
-    
+
 def test_create_tenant_database():
     # Test database creation logic
 ```
@@ -205,7 +205,7 @@ def test_create_tenant_database():
 ```python
 def test_initialize_complete_flow():
     # Test complete initialization process
-    
+
 def test_generate_custom_schema_flow():
     # Test complete schema generation
 ```
@@ -214,7 +214,7 @@ def test_generate_custom_schema_flow():
 ```python
 def test_initialize_with_invalid_credentials():
     # Test error handling in initialization
-    
+
 def test_schema_generation_with_missing_database():
     # Test error recovery in schema generation
 ```

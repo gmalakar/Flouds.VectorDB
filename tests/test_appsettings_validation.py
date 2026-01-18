@@ -1,3 +1,9 @@
+# =============================================================================
+# File: test_appsettings_validation.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 import pytest
 
 from app.config.appsettings import AppSettings, VectorDBConfig

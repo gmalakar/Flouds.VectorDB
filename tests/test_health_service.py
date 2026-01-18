@@ -6,7 +6,7 @@
 
 from unittest.mock import Mock, patch
 
-import pytest
+import pytest  # noqa: F401
 
 from app.services.health_service import HealthService
 
@@ -18,9 +18,7 @@ class TestHealthService:
     def test_get_health_status_healthy(self, mock_psutil, mock_milvus):
         # Mock Milvus as healthy
         mock_admin_client = Mock()
-        mock_milvus._BaseMilvus__get_internal_admin_client.return_value = (
-            mock_admin_client
-        )
+        mock_milvus._BaseMilvus__get_internal_admin_client.return_value = mock_admin_client
         mock_milvus.check_connection.return_value = True
         mock_admin_client.list_databases.return_value = ["db1", "db2"]
 
@@ -74,9 +72,7 @@ class TestHealthService:
     def test_get_health_status_degraded_system(self, mock_psutil, mock_milvus):
         # Mock Milvus as healthy
         mock_admin_client = Mock()
-        mock_milvus._BaseMilvus__get_internal_admin_client.return_value = (
-            mock_admin_client
-        )
+        mock_milvus._BaseMilvus__get_internal_admin_client.return_value = mock_admin_client
         mock_milvus.check_connection.return_value = True
         mock_admin_client.list_databases.return_value = ["db1"]
 

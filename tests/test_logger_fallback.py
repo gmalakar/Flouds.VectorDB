@@ -1,4 +1,10 @@
-import importlib
+# =============================================================================
+# File: test_logger_fallback.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
+import importlib  # noqa: F401
 import logging
 
 import app.logger as app_logger

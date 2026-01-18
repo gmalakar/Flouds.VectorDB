@@ -1,6 +1,12 @@
+# =============================================================================
+# File: test_transaction_manager.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 import pytest
 
-from app.modules.transaction_manager import transactional_operation, Transaction
+from app.modules.transaction_manager import Transaction, transactional_operation  # noqa: F401
 
 
 def test_transaction_success_executes_all_operations():

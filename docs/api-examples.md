@@ -437,7 +437,7 @@ class FloudsVectorClient:
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {username}:{password}'
         }
-    
+
     def insert_vectors(self, tenant_code, model_name, data):
         url = f"{self.base_url}/api/v1/vector_store/insert"
         payload = {
@@ -447,7 +447,7 @@ class FloudsVectorClient:
         }
         response = requests.post(url, headers=self.headers, json=payload)
         return response.json()
-    
+
     def search_vectors(self, tenant_code, model, vector, limit=10):
         url = f"{self.base_url}/api/v1/vector_store/search"
         payload = {

@@ -7,6 +7,7 @@
 import json
 import time
 import uuid
+from typing import Any, Callable
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -27,7 +28,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     Logs request metadata, sanitized request bodies, and response status/duration.
     """
 
-    async def dispatch(self, request: Request, call_next) -> object:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Any]) -> Any:
         """
         Intercept requests and log request/response details.
 
@@ -44,16 +45,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         request.state.request_id = request_id
 
         # Log request
-        client_ip = sanitize_for_log(
-            request.client.host if request.client else "unknown"
-        )
+        client_ip = sanitize_for_log(request.client.host if request.client else "unknown")
         method = sanitize_for_log(request.method)
         url = sanitize_for_log(str(request.url))
         user_agent = sanitize_for_log(request.headers.get("user-agent", ""))
 
-        logger.info(
-            f"Request[{request_id}]: {method} {url} from {client_ip} UA: {user_agent}"
-        )
+        logger.info(f"Request[{request_id}]: {method} {url} from {client_ip} UA: {user_agent}")
 
         # Log request body for POST/PUT (sanitized)
         if request.method in ["POST", "PUT", "PATCH"]:
@@ -96,13 +93,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         duration = time.time() - start_time
         status_code = response.status_code
 
-        logger.info(
-            f"Response[{request_id}]: {status_code} for {method} {url} in {duration:.3f}s"
-        )
+        logger.info(f"Response[{request_id}]: {status_code} for {method} {url} in {duration:.3f}s")
 
         return response
 
-    def _sanitize_request_body(self, data) -> object:
+    def _sanitize_request_body(self, data: Any) -> Any:
         """
         Sanitize request body by removing sensitive fields and limiting size.
 

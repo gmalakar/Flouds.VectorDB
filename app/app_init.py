@@ -7,6 +7,7 @@ import os
 import warnings
 
 import nltk
+from nltk.corpus import stopwords
 
 from app.config.config_loader import ConfigLoader
 from app.logger import get_logger
@@ -31,7 +32,5 @@ except LookupError:
     logger.info("NLTK stopwords corpus downloaded successfully.")
 
 # Print stopwords count
-from nltk.corpus import stopwords
-
 stopwords_count = len(stopwords.words("english"))
 logger.info(f"Total English stopwords count: {stopwords_count}")

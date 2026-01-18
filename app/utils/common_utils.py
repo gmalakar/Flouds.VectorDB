@@ -38,9 +38,7 @@ class CommonUtils:
         return kwargs.get(key, None)
 
     @staticmethod
-    def add_missing_from_other(
-        target: Dict[str, Any], source: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def add_missing_from_other(target: Dict[str, Any], source: Dict[str, Any]) -> Dict[str, Any]:
         """
         Add only missing key-value pairs from source to target dict.
         Existing keys in target are not overwritten.

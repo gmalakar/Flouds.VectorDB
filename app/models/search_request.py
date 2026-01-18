@@ -13,11 +13,7 @@ from pydantic import Field, field_validator
 
 from app.models.base_request import BaseRequest
 from app.models.search_base import SearchEmbeddedBase
-from app.utils.input_validator import (
-    sanitize_text_input,
-    validate_model_name,
-    validate_vector,
-)
+from app.utils.input_validator import sanitize_text_input, validate_model_name, validate_vector
 
 
 class SearchEmbeddedRequest(BaseRequest, SearchEmbeddedBase):
@@ -171,9 +167,7 @@ class SearchEmbeddedRequest(BaseRequest, SearchEmbeddedBase):
 
     @field_validator("meta_filter")
     @classmethod
-    def validate_meta_filter(
-        cls, v: Optional[Dict[str, str]]
-    ) -> Optional[Dict[str, str]]:
+    def validate_meta_filter(cls, v: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
         """Ensure meta_filter is small and string-coercible."""
         if v is None:
             return v

@@ -1,9 +1,15 @@
+# =============================================================================
+# File: test_cors_integration_new.py
+# Date: 2026-01-18
+# Copyright (c) 2024 Goutam Malakar. All rights reserved.
+# =============================================================================
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.middleware.tenant_security import TenantCorsMiddleware
-from app.services.config_service import config_service
 from app.modules.key_manager import key_manager
+from app.services.config_service import config_service
 
 
 def create_app():

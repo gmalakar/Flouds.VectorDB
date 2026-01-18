@@ -21,12 +21,22 @@ from app.utils.performance_tracker import perf_tracker
 
 logger = get_logger("auth")
 
+# Module-level Header defaults to avoid function-call-in-defaults (flake8-bugbear B008)
+TENANT_CODE_HEADER = Header(
+    "",
+    alias="X-Tenant-Code",
+    description="Tenant code for request",
+)
 
-def common_headers(
-    tenant_code: str = Header(
-        "", alias="X-Tenant-Code", description="Tenant code for request"
-    ),
-) -> Dict[str, str]:
+DB_TOKEN_HEADER = Header(
+    ...,  # required
+    alias="Flouds-VectorDB-Token",
+    description="Database credential token in format user|password or user:password",
+    convert_underscores=False,
+)
+
+
+def common_headers(tenant_code: str = TENANT_CODE_HEADER) -> Dict[str, str]:
     """Dependency that declares common headers used across endpoints.
 
     This is used for documentation purposes (OpenAPI) so routes show the
@@ -37,14 +47,7 @@ def common_headers(
     return {"tenant_code": tenant_code}
 
 
-def get_db_token(
-    db_token: str = Header(
-        ...,  # required
-        alias="Flouds-VectorDB-Token",
-        description="Database credential token in format user|password or user:password",
-        convert_underscores=False,
-    )
-) -> str:
+def get_db_token(db_token: str = DB_TOKEN_HEADER) -> str:
     """Fetch `Flouds-VectorDB-Token` DB credential header or raise 401 if missing."""
     if not db_token:
         logger.error("Missing Flouds-VectorDB-Token header for DB credentials.")
@@ -67,13 +70,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         try:
             key_manager.load_clients()
         except Exception:
-            logger.exception(
-                "Failed to load clients during auth middleware initialization"
-            )
+            logger.exception("Failed to load clients during auth middleware initialization")
 
-        self._keys_configured = (
-            bool(key_manager.get_all_tokens()) if self.enabled else True
-        )
+        self._keys_configured = bool(key_manager.get_all_tokens()) if self.enabled else True
 
         # Cache public endpoints for faster lookup.
         # NOTE: avoid including root-level prefixes such as '/' here because
@@ -97,9 +96,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if self.enabled:
             valid_keys = key_manager.get_all_tokens()
             if valid_keys:
-                logger.info(
-                    f"API authentication enabled with {len(valid_keys)} client(s)"
-                )
+                logger.info(f"API authentication enabled with {len(valid_keys)} client(s)")
             else:
                 logger.warning("API authentication enabled but no clients configured")
         else:
@@ -133,11 +130,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 return xff.split(",", 1)[0].strip()
             client = getattr(req, "client", None)
             try:
-                return (
-                    client.host
-                    if client and getattr(client, "host", None)
-                    else "unknown"
-                )
+                return client.host if client and getattr(client, "host", None) else "unknown"
             except Exception:
                 return "unknown"
 
@@ -167,9 +160,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not tenant_header:
             # register attempt and possibly block; tenant unknown -> use 'master'
             try:
-                blocked_now, reason = offender_manager.register_attempt(
-                    client_ip, tenant="master"
-                )
+                blocked_now, reason = offender_manager.register_attempt(client_ip, tenant="master")
             except Exception:
                 blocked_now, reason = False, ""
 
@@ -251,19 +242,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # Avoid logging raw tokens or secrets. Log only masked client id.
             try:
                 if token and ("|" in token or ":" in token):
-                    cid = (
-                        token.split("|", 1)[0]
-                        if "|" in token
-                        else token.split(":", 1)[0]
-                    )
+                    cid = token.split("|", 1)[0] if "|" in token else token.split(":", 1)[0]
                     masked = f"{cid}|***"
                 else:
                     masked = "***"
             except Exception:
                 masked = "***"
-            logger.warning(
-                "Authentication failed for API token: %s", sanitize_for_log(masked)
-            )
+            logger.warning("Authentication failed for API token: %s", sanitize_for_log(masked))
             error_response = BaseResponse(
                 success=False,
                 message="Invalid API token",
