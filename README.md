@@ -1,6 +1,6 @@
 # FloudsVector
 
-Professional multi-tenant vector database service built on FastAPI and Milvus, providing production-grade APIs for semantic search, hybrid retrieval, and vector store management.
+**FloudsVector** is an enterprise-grade multi-tenant vector database service built on FastAPI and Milvus, providing production-grade APIs for semantic search, hybrid retrieval, and vector store management with comprehensive monitoring and security.
 
 > **Note:** This is an active project looking for collaborators! If you're interested in vector databases, FastAPI, or scalable backend systems, contributions are welcome.
 
@@ -12,13 +12,14 @@ Professional multi-tenant vector database service built on FastAPI and Milvus, p
 - **Reciprocal Rank Fusion (RRF)** – Intelligent result combination for dense + sparse searches
 - **Advanced Filtering** – Stop word handling, minimum word matching, metadata filtering
 - **Semantic Similarity** – High-performance similarity search at scale
+- **Multi-collection Support** – Model-specific collections with automatic schema generation
 
 ### 🏢 Multi-Tenancy
 - **Complete Data Isolation** – Tenant-scoped collections and metadata
 - **User & Role Management** – Authentication and authorization per tenant
 - **Tenant-Aware Caching** – In-memory cache with automatic invalidation
 - **Dynamic Configuration** – Runtime config changes without restart
-- **CORS & Trusted Hosts** – Tenant-specific security policies with pattern matching
+- **CORS & Trusted Hosts** – Tenant-specific security policies with pattern matching (wildcards & regex)
 
 ### 🚀 Enterprise Features
 - **High-Performance Backend** – Milvus 2.3+ for scalable similarity search
@@ -27,6 +28,11 @@ Professional multi-tenant vector database service built on FastAPI and Milvus, p
 - **RESTful API** – OpenAPI documentation with versioning (`/api/v1/`)
 - **Thread-Safe Design** – Concurrent request handling and state management
 - **Docker Ready** – Multi-stage builds with health checks and orchestration
+- **Comprehensive Monitoring** – Performance metrics, connection pooling, detailed logging
+
+## Overview
+
+Professional multi-tenant vector database service built on FastAPI and Milvus for production deployment of semantic search, vector embeddings, and hybrid retrieval with enterprise-grade monitoring and security.
 
 ## Quick Start
 
@@ -246,8 +252,9 @@ FloudsVector.Py/
 │   ├── logger.py                        # Logging setup
 │   └── requirements.txt                 # Python dependencies
 ├── docs/
-│   ├── USAGE_EXAMPLES.md                # Copy-paste examples
-│   └── API.md                           # API documentation
+│   ├── api-examples.md                  # API examples and cURL commands
+│   ├── USAGE_EXAMPLES.md                # Copy-paste examples for common tasks
+│   └── postman-collection.json          # Postman API collection
 ├── tests/                               # Pytest test suite
 ├── Dockerfile                           # Container image
 ├── docker-compose.yml                   # Multi-service orchestration
@@ -261,8 +268,8 @@ FloudsVector.Py/
 Comprehensive documentation is available in the `docs/` directory:
 
 - **[API Examples](docs/api-examples.md)** – Practical examples and cURL commands
+- **[Usage Examples](docs/USAGE_EXAMPLES.md)** – Copy-paste examples for common tasks
 - **[Postman Collection](docs/postman-collection.json)** – Ready-to-use API collection
-- **[Test Script](docs/test-endpoints.sh)** – Bash script for endpoint testing
 
 ## Key Concepts
 
@@ -273,6 +280,7 @@ All data is isolated per tenant using the `X-Tenant-Code` header:
 ```bash
 curl -X POST "http://localhost:19680/api/v1/vector/insert" \
   -H "X-Tenant-Code: tenant-123" \
+  -H "Authorization: Bearer user:password" \
   -H "Content-Type: application/json" \
   -d '{...}'
 ```
@@ -284,6 +292,7 @@ Combine dense and sparse vectors with Reciprocal Rank Fusion:
 ```bash
 curl -X POST "http://localhost:19680/api/v1/vector/search" \
   -H "X-Tenant-Code: tenant-123" \
+  -H "Authorization: Bearer user:password" \
   -H "Content-Type: application/json" \
   -d '{
     "dense_vector": [...],
