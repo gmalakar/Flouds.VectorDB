@@ -733,7 +733,10 @@ class VectorStore(BaseMilvus):
         return rrf_scores
 
     def _apply_text_filter(
-        self, text_filter: str, chunk_content: str, search_request: SearchEmbeddedRequest
+        self,
+        text_filter: str,
+        chunk_content: str,
+        search_request: SearchEmbeddedRequest,
     ) -> bool:
         """
         Apply text filter if provided.

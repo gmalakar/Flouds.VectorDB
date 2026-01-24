@@ -180,7 +180,9 @@ class Transaction:
 
 
 @contextmanager
-def transactional_operation(name: str = "transaction") -> Generator["Transaction", None, None]:
+def transactional_operation(
+    name: str = "transaction",
+) -> Generator["Transaction", None, None]:
     """
     Context manager for transactional operations with automatic rollback on error.
 

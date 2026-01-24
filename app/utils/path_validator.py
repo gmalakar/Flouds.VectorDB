@@ -50,7 +50,10 @@ def validate_safe_path(file_path: Union[str, Path], base_dir: Union[str, Path]) 
 
 
 def safe_open(
-    file_path: Union[str, Path], base_dir: Union[str, Path], mode: str = "r", **kwargs: Any
+    file_path: Union[str, Path],
+    base_dir: Union[str, Path],
+    mode: str = "r",
+    **kwargs: Any,
 ) -> IO[Any]:
     safe_path = validate_safe_path(file_path, base_dir)
     if "w" in mode or "a" in mode or "+" in mode:
