@@ -105,10 +105,8 @@ def _validate_vectordb_config() -> List[str]:
         errors.append("Vector database configuration is required")
         return errors
 
-    # Get values from centralized settings (prefer legacy `endpoint` if present)
-    container_name = getattr(APP_SETTINGS.vectordb, "endpoint", None) or getattr(
-        APP_SETTINGS.vectordb, "container_name", None
-    )
+    # Get values from centralized settings
+    container_name = getattr(APP_SETTINGS.vectordb, "container_name", None)
     port = int(APP_SETTINGS.vectordb.port) if APP_SETTINGS.vectordb.port is not None else None
     username = APP_SETTINGS.vectordb.username
 

@@ -164,27 +164,6 @@ class SecurityPatternMatcher:
         response.headers["Access-Control-Allow-Credentials"] = "true"
 
 
-# Module-level convenience functions for backwards compatibility
-def _extract_token(request: Request) -> Optional[str]:
-    """Extract bearer token from Authorization header or `token` query param in dev."""
-    return SecurityPatternMatcher.extract_token(request)
-
-
-def _cors_preflight(origin_value: Optional[str]) -> Response:
-    """Return a 204 preflight response with standard CORS headers for origin_value."""
-    return SecurityPatternMatcher.cors_preflight(origin_value)
-
-
-def _apply_cors_headers(response: Response, origin_value: Optional[str]) -> None:
-    """Append standard CORS headers to an existing response in-place."""
-    return SecurityPatternMatcher.apply_cors_headers(response, origin_value)
-
-
-def _match_pattern(value: Optional[str], pattern: Optional[str]) -> bool:
-    """Match a value against a single allowed pattern."""
-    return SecurityPatternMatcher.match_pattern(value, pattern)
-
-
 def _is_allowed(value: Optional[str], allowed_list: List[str]) -> bool:
     """Check if value matches any entry in the allowed list using pattern matching."""
     return SecurityPatternMatcher.is_allowed(value, allowed_list)
@@ -218,7 +197,7 @@ class TenantTrustedHostMiddleware(BaseHTTPMiddleware):
                 # a superadmin-authenticated client to bypass this check. We
                 # use the same token extraction helper to avoid duplicating logic.
                 try:
-                    token = _extract_token(request)
+                    token = SecurityPatternMatcher.extract_token(request)
                     if token:
                         client = key_manager.authenticate_client(token, tenant_code=tenant or "")
                         if client and getattr(client, "client_type", "") == "superadmin":
@@ -297,9 +276,9 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
             # If same-origin by hostname (or localhost aliases), allow and echo Origin for preflight
             if origin_header and _same_origin(host_only, origin_host_only):
                 if request.method == "OPTIONS":
-                    return _cors_preflight(origin_header)
+                    return SecurityPatternMatcher.cors_preflight(origin_header)
                 response = await call_next(request)
-                _apply_cors_headers(response, origin_header)
+                SecurityPatternMatcher.apply_cors_headers(response, origin_header)
                 return response
 
             if "*" not in allowed_origins and origin_header:
@@ -332,7 +311,7 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
                             # is authenticated (require token). If not authenticated
                             # we fall through and allow superadmin-only bypass later.
                             try:
-                                token = _extract_token(request)
+                                token = SecurityPatternMatcher.extract_token(request)
                                 if token:
                                     client = key_manager.authenticate_client(
                                         token, tenant_code=tenant or ""
@@ -345,9 +324,13 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
                                             tenant,
                                         )
                                         if request.method == "OPTIONS":
-                                            return _cors_preflight(origin_header)
+                                            return SecurityPatternMatcher.cors_preflight(
+                                                origin_header
+                                            )
                                         response = await call_next(request)
-                                        _apply_cors_headers(response, origin_header)
+                                        SecurityPatternMatcher.apply_cors_headers(
+                                            response, origin_header
+                                        )
                                         return response
                             except Exception:
                                 logger.exception(
@@ -359,7 +342,7 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
                         # checks have failed. Allow a superadmin authenticated
                         # client to bypass as a last resort.
                         try:
-                            token = _extract_token(request)
+                            token = SecurityPatternMatcher.extract_token(request)
                             if token:
                                 client = key_manager.authenticate_client(
                                     token, tenant_code=tenant or ""
@@ -371,9 +354,11 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
                                         tenant,
                                     )
                                     if request.method == "OPTIONS":
-                                        return _cors_preflight(origin_header)
+                                        return SecurityPatternMatcher.cors_preflight(origin_header)
                                     response = await call_next(request)
-                                    _apply_cors_headers(response, origin_header)
+                                    SecurityPatternMatcher.apply_cors_headers(
+                                        response, origin_header
+                                    )
                                     return response
                         except Exception:
                             logger.exception("Error checking superadmin bypass during CORS flow")
@@ -404,11 +389,11 @@ class TenantCorsMiddleware(BaseHTTPMiddleware):
 
             # Handle preflight
             if request.method == "OPTIONS":
-                return _cors_preflight(allow_origin)
+                return SecurityPatternMatcher.cors_preflight(allow_origin)
 
             response = await call_next(request)
             # Append CORS headers
-            _apply_cors_headers(response, allow_origin)
+            SecurityPatternMatcher.apply_cors_headers(response, allow_origin)
             return response
         except Exception:
             logger.exception("CORS middleware error")

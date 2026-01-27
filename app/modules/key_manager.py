@@ -70,10 +70,10 @@ class KeyManager:
         candidate = (
             db_path
             if db_path is not None
-            else getattr(APP_SETTINGS.security, "clients_db_path", "/app/data/clients.db")
+            else getattr(APP_SETTINGS.security, "clients_db_path", "clients.db")
         )
         if candidate is None:
-            candidate = "/app/data/clients.db"
+            candidate = "clients.db"
         self.db_path: str = str(candidate)
         self.clients: dict[str, Client] = {}
         self._token_cache: Set[str] = set()
@@ -503,27 +503,16 @@ class KeyManager:
     def _write_admin_files(self, admin_id: str, admin_secret: str) -> None:
         from datetime import datetime
 
-        db_dir = os.path.dirname(os.path.abspath(str(self.db_path)))
-        console_file_path = os.path.join(db_dir, "admin_console.txt")
-        creds_file = os.path.join(db_dir, "admin_credentials.txt")
+        # Log credentials to console in development
+        logger.warning("=== ADMIN CREDENTIALS CREATED ===")
+        logger.warning(f"Admin Client ID: {admin_id}")
+        logger.warning(f"Admin Secret: {admin_secret}")
+        logger.warning(f"Admin Token: {admin_id}|{admin_secret}")
+        logger.warning("=== SAVE THESE CREDENTIALS ===")
 
-        console_contents = [
-            "=== ADMIN CREDENTIALS CREATED ===\n",
-            f"Admin Client ID: {admin_id}\n",
-            f"Admin Secret: {admin_secret}\n",
-            f"Admin Token: {admin_id}|{admin_secret}\n",
-            "=== SAVE THESE CREDENTIALS ===\n",
-        ]
-        try:
-            with safe_open(console_file_path, db_dir, "w", encoding="utf-8") as console_file:
-                console_file.writelines(console_contents)
-            logger.warning("Admin credentials saved to %s", sanitize_for_log(console_file_path))
-        except Exception as e:
-            logger.error(
-                "Failed to save admin console to %s: %s",
-                sanitize_for_log(console_file_path),
-                str(e),
-            )
+        # Write detailed credentials file
+        db_dir = os.path.dirname(os.path.abspath(str(self.db_path)))
+        creds_file = os.path.join(db_dir, "admin_credentials.txt")
 
         try:
             with safe_open(creds_file, db_dir, "w", encoding="utf-8") as f:
@@ -537,7 +526,7 @@ class KeyManager:
                 f.write(f"Authorization: Bearer {admin_id}|{admin_secret}\n")
                 f.write("\n")
                 f.write("Example:\n")
-                f.write(f'curl -H "Authorization: Bearer {admin_id}|{admin_secret}" \\\n+')
+                f.write(f'curl -H "Authorization: Bearer {admin_id}|{admin_secret}" \\\n')
                 f.write("  http://localhost:19680/api/v1/admin/clients\n")
             logger.warning(
                 "Admin credentials saved to: %s",

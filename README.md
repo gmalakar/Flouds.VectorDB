@@ -8,11 +8,12 @@
 
 ### 🔍 Vector Search
 - **Dense Vector Search** – COSINE, L2, and IP distance metrics with configurable indices
-- **Sparse Vector Search** – BM25 keyword matching for hybrid retrieval
-- **Reciprocal Rank Fusion (RRF)** – Intelligent result combination for dense + sparse searches
+- **Sparse Vector Search (BM25)** – Built-in BM25 keyword matching via `pymilvus[model]`
+- **Hybrid Search with RRF** – Reciprocal Rank Fusion combining dense + sparse results
 - **Advanced Filtering** – Stop word handling, minimum word matching, metadata filtering
 - **Semantic Similarity** – High-performance similarity search at scale
 - **Multi-collection Support** – Model-specific collections with automatic schema generation
+- **NLTK Integration** – Automatic punkt_tab download for text tokenization
 
 ### 🏢 Multi-Tenancy
 - **Complete Data Isolation** – Tenant-scoped collections and metadata
@@ -61,18 +62,27 @@ Server runs on `http://localhost:19680` with API docs at `/api/v1/docs`
 
 ### Docker Deployment
 
-**Build and run with Milvus:**
+**Build and run (with no-cache by default):**
 ```bash
-docker-compose up --build
+.\build-flouds-vector.ps1
+docker-compose up -d
 ```
 
-**Or with custom Milvus endpoint:**
+**Or build manually:**
 ```bash
+docker build --no-cache -t flouds-vector:latest .
 docker run -p 19680:19680 \
-  -e VECTORDB_ENDPOINT=milvus-server \
+  -e VECTORDB_CONTAINER_NAME=milvus-server \
   -e VECTORDB_PORT=19530 \
-  flouds-vector
+  flouds-vector:latest
 ```
+
+**Docker Image Details:**
+- Base: Python 3.12-slim (Debian)
+- Runtime: FastAPI + Uvicorn
+- BM25/Sparse: pymilvus[model] with BM25EmbeddingFunction
+- Health checks enabled
+- Multi-stage build for optimized size
 
 ### PowerShell Deployment
 
@@ -83,20 +93,36 @@ docker run -p 19680:19680 \
 
 ## Installation
 
-1. Install Python 3.9+:
+### Requirements
+- **Python**: 3.10+ (3.12 recommended for Docker builds)
+- **Milvus**: 2.3+ with sparse vector support
+- **System**: 4GB+ RAM, Docker (optional)
+
+### Setup Steps
+
+1. **Check Python version:**
 ```bash
-python --version
+python --version  # Should be 3.10 or higher
 ```
 
-2. Install dependencies:
+2. **Install runtime dependencies:**
 ```bash
 pip install -r app/requirements.txt
 ```
 
-3. (Optional) Install development tools:
+3. **Install development tools (optional):**
 ```bash
 pip install -r requirements-dev.txt
 ```
+
+### Key Dependencies
+- **fastapi** (≥0.116.1) – Modern web framework
+- **pymilvus[model]** (≥2.4.4) – Milvus client with BM25 support
+- **uvicorn[standard]** (≥0.32.0) – ASGI server
+- **pydantic** (≥2.10.0) – Data validation
+- **nltk** (≥3.9) – Natural language processing
+- **cryptography** (≥42.0.0) – Encryption
+- **requests** (≥2.31.0) – HTTP client
 
 ## Configuration
 
@@ -106,7 +132,7 @@ pip install -r requirements-dev.txt
 | `APP_NAME` | `FloudsVectors` | Application name |
 | `SERVER_HOST` | `0.0.0.0` | Server host binding |
 | `SERVER_PORT` | `19680` | Server port |
-| `VECTORDB_ENDPOINT` | `localhost` | Milvus server endpoint |
+| `VECTORDB_CONTAINER_NAME` | `localhost` | Milvus server endpoint |
 | `VECTORDB_PORT` | `19530` | Milvus server port |
 | `VECTORDB_USERNAME` | `root` | Milvus username |
 | `VECTORDB_PASSWORD` | (required) | Milvus password |
@@ -481,4 +507,4 @@ See LICENSE file.
 
 ## Contributing
 
-See CONTRIBUTING.md for guidelines.
+See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines.

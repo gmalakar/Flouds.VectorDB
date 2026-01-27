@@ -1,14 +1,16 @@
 # Build stage
-FROM python:3.11-alpine AS builder
+FROM python:3.12-slim AS builder
 
 # Keep pip lean and avoid .pyc files to shrink copy size
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Install build dependencies only in the builder (alpine packages are smaller)
-RUN apk add --no-cache --virtual .build-deps \
-    gcc musl-dev libffi-dev openssl-dev python3-dev
+# Install build dependencies only in the builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create isolated venv for runtime reuse
 RUN python -m venv /opt/venv
@@ -19,22 +21,36 @@ RUN python -m pip install --no-deps --upgrade "pip>=25.3"
 
 # Copy and install Python dependencies into the venv
 COPY app/requirements.txt /tmp/requirements.txt
-RUN python -m pip install --no-compile -r /tmp/requirements.txt && \
-    # Strip unnecessary files to reduce size
-    find /opt/venv -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
+RUN python -m pip install --no-compile -r /tmp/requirements.txt
+
+# Debug: capture installed packages and sizes before cleanup
+RUN echo "=== Installed Packages ===" && \
+    python -m pip list && \
+    echo "" && \
+    echo "=== Venv Size Before Cleanup ===" && \
+    du -sh /opt/venv && \
+    echo "" && \
+    echo "=== Top 15 Largest Packages ===" && \
+    du -sh /opt/venv/lib/python*/site-packages/* 2>/dev/null | sort -rh | head -n 15
+
+# Strip unnecessary files to reduce size
+RUN find /opt/venv -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
     find /opt/venv -type d -name "test" -exec rm -rf {} + 2>/dev/null || true && \
     find /opt/venv -type f -name "*.pyo" -delete && \
     find /opt/venv -type f -name "*.pyc" -delete && \
     find /opt/venv -type f -name "*.exe" -delete && \
     find /opt/venv -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true && \
-    rm -rf /opt/venv/lib/python3.11/site-packages/pip/_vendor/distlib/*.exe && \
-    # Remove build dependencies to reduce layer size
-    apk del .build-deps && \
-    # Clean up any remaining pip cache
-    rm -rf /root/.cache /tmp/*
+    find /opt/venv -type f -name "*.a" -delete && \
+    rm -rf /opt/venv/lib/python3.12/site-packages/pip/_vendor/distlib/*.exe && \
+    apt-get remove -y build-essential && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /root/.cache /tmp/* && \
+    echo "" && \
+    echo "=== Venv Size After Cleanup ===" && \
+    du -sh /opt/venv
 
 # Runtime stage
-FROM python:3.11-alpine
+FROM python:3.12-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -49,9 +65,11 @@ ENV PYTHONUNBUFFERED=1 \
     FLOUDS_APP_SECRETS=/flouds-vector/data/secrets \
     PATH=/opt/venv/bin:$PATH
 
-# Install runtime dependencies only (libffi for cryptography, libstdc++ for some C++ libs)
-RUN apk add --no-cache libffi libstdc++ && \
-    rm -rf /tmp/* /var/cache/apk/*
+# Install runtime dependencies only (ca-certificates for HTTPS)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Copy prebuilt venv from builder
 COPY --from=builder /opt/venv /opt/venv

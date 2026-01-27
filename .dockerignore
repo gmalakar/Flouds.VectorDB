@@ -57,7 +57,7 @@ Dockerfile*
 docker-compose*.yml
 
 # Documentation and scripts
-*.md
+**/*.md
 *.ps1
 *.sh
 *.bat
@@ -89,9 +89,9 @@ Icon?
 desktop.ini
 
 # Temporary files
-*.tmp
-*.bak
-*.old
+**/*.tmp
+**/*.bak
+**/*.old
 
 # Additional exclusions
 secrets/

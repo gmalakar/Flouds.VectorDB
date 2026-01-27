@@ -40,7 +40,7 @@ class OffenderManager:
         # tenant_code ("" for global) -> (max_attempts, window_seconds, block_seconds)
         self._tenant_block_config: dict[str, tuple[int, int, int]] = {}
 
-        # Ensure master/global defaults exist in config DB
+        # Ensure master/global defaults exist in config DB (optional, will fall back to env/defaults)
         try:
             defaults = {
                 "block_max_attempts": "5",
@@ -52,8 +52,9 @@ class OffenderManager:
                 if cur is None:
                     config_service.set_config(k, v, "master")
                     logger.info(f"Inserted default config {k}={v} for tenant 'master'")
-        except Exception:
-            logger.exception("Failed to ensure default block config in config DB")
+        except Exception as e:
+            # Config DB may not be initialized yet; will use env vars or hard-coded defaults
+            logger.debug(f"Config DB not available during offender_manager init: {e}")
 
     def _get_block_config_for_tenant(self, tenant: str) -> tuple[int, int, int]:
         t = tenant or ""

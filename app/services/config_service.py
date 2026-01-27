@@ -159,19 +159,6 @@ def init_db() -> None:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_config_key_tenant ON config_kv(key, tenant_code)"
             )
-            # Migrate from legacy `security_kv` table if present
-            cur = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='security_kv'"
-            )
-            if cur.fetchone():
-                try:
-                    conn.execute(
-                        "INSERT OR IGNORE INTO config_kv(key, tenant_code, value, encrypted_flag) SELECT key, '', value, 0 FROM security_kv"
-                    )
-                    conn.execute("DROP TABLE IF EXISTS security_kv")
-                    logger.info("Migrated legacy security_kv to config_kv")
-                except Exception:
-                    logger.exception("Failed to migrate security_kv to config_kv")
     except Exception as e:
         logger.exception(f"Failed to initialize config DB at {db}: {e}")
     finally:
