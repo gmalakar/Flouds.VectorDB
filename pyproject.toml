@@ -23,3 +23,8 @@ target-version = ['py312']
 
 [tool.mypy]
 ignore_missing_imports = true
+python_version = "3.12"
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203", "W503"]

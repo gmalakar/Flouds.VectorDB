@@ -5,7 +5,7 @@
 # =============================================================================
 
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -36,6 +36,6 @@ class HealthResponse(BaseModel):
 
     components: Dict[str, str] = Field(description="Status of individual components")
 
-    details: Optional[Dict[str, dict]] = Field(
+    details: Optional[Dict[str, Any]] = Field(
         default=None, description="Additional health check details"
     )

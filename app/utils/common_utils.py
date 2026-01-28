@@ -5,7 +5,7 @@
 # =============================================================================
 
 
-from typing import Any, Dict, Type, TypeVar, Union
+from typing import Any, Dict, Type, TypeVar, Union, cast
 
 from pydantic import BaseModel
 
@@ -16,7 +16,8 @@ T = TypeVar("T", bound=BaseModel)
 class CommonUtils:
     """
     Utility class for common dictionary and request operations.
-    Provides type-safe helpers for working with Pydantic models and dictionaries.
+    Provides type-safe helpers for working with Pydantic models
+    and dictionaries.
     """
 
     @staticmethod
@@ -32,7 +33,7 @@ class CommonUtils:
             The value for the key if present, else None.
 
         Example:
-            >>> CommonUtils.get_value_from_kwargs("timeout", timeout=30, retries=3)
+            >>> CommonUtils.get_value_from_kwargs("timeout", timeout=30)
             30
         """
         return kwargs.get(key, None)
@@ -67,10 +68,11 @@ class CommonUtils:
         request: Union[BaseModel, Dict[str, Any]], model_class: Type[T]
     ) -> Dict[str, Any]:
         """
-        Extract extra fields from a request that are not defined in the model class.
+        Extract extra fields from a request that are not defined
+        in the model class.
 
-        This is useful for detecting and capturing unexpected fields in API requests
-        that don't match the expected Pydantic model schema.
+        This is useful for detecting and capturing unexpected fields in API
+        requests that don't match the expected Pydantic model schema.
 
         Args:
             request: The request object (Pydantic model instance or dict).
@@ -87,16 +89,29 @@ class CommonUtils:
             >>> class User(BaseModel):
             ...     name: str
             ...     email: str
-            >>> request = {"name": "John", "email": "john@example.com", "extra": "value"}
+            >>> request = {"name": "John", "extra": "value"}
             >>> extra = CommonUtils.parse_extra_fields(request, User)
             >>> extra
             {"extra": "value"}
         """
         # Get all fields defined in the model (Pydantic v2 compatibility)
         if hasattr(model_class, "model_fields"):
-            model_fields = set(model_class.model_fields.keys())
+            # model_fields can be a mapping or a callable returning a
+            # mapping (pydantic v2)
+            mf_raw = cast(Any, model_class.model_fields)
+            if callable(mf_raw):
+                mf = cast(Dict[str, Any], mf_raw())
+            else:
+                mf = cast(Dict[str, Any], mf_raw)
+            model_fields = set(mf.keys())
         else:
-            model_fields = set(model_class.__fields__.keys())
+            # Fallback for pydantic v1 compatibility: use __fields__
+            # if available
+            if hasattr(model_class, "__fields__"):
+                fields_attr = cast(Dict[str, Any], model_class.__fields__)
+                model_fields = set(fields_attr.keys())
+            else:
+                model_fields = set()
 
         # Convert request to dict (Pydantic v2 compatibility)
         if hasattr(request, "model_dump"):
@@ -128,7 +143,5 @@ class CommonUtils:
         p = payload_tcode or None
         if not key_manager.is_super_admin(client_id):
             if p and h and p != h:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Mismatched tenant_code between header and payload/query parameter",
-                )
+                detail_msg = "Mismatched tenant_code between header and " "payload/query parameter"
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail_msg)

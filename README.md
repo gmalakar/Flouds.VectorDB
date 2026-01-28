@@ -12,6 +12,19 @@
 - **Hybrid Search with RRF** – Reciprocal Rank Fusion combining dense + sparse results
 - **Advanced Filtering** – Stop word handling, minimum word matching, metadata filtering
 - **Semantic Similarity** – High-performance similarity search at scale
+
+## Environment variables
+
+Configuration via environment variables uses the `FLOUDS_*` namespace.
+
+- `FLOUDS_HOST` — Hostname or IP the application binds to.
+- `FLOUDS_PORT` — TCP port the application listens on.
+- `FLOUDS_OPENAPI_URL` — Public URL for the OpenAPI/Swagger schema.
+
+After changing environment variables restart the service for the changes to take effect.
+
+If you maintain deployment scripts or CI, update them to set the `FLOUDS_*`
+variables to avoid collisions with other tooling.
 - **Multi-collection Support** – Model-specific collections with automatic schema generation
 - **NLTK Integration** – Automatic punkt_tab download for text tokenization
 
@@ -130,8 +143,8 @@ pip install -r requirements-dev.txt
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `APP_NAME` | `FloudsVectors` | Application name |
-| `SERVER_HOST` | `0.0.0.0` | Server host binding |
-| `SERVER_PORT` | `19680` | Server port |
+| `FLOUDS_HOST` | `0.0.0.0` | Server host binding |
+| `FLOUDS_PORT` | `19680` | Server port |
 | `VECTORDB_CONTAINER_NAME` | `localhost` | Milvus server endpoint |
 | `VECTORDB_PORT` | `19530` | Milvus server port |
 | `VECTORDB_USERNAME` | `root` | Milvus username |

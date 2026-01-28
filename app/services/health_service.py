@@ -4,7 +4,7 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 
-from datetime import datetime
+from datetime import datetime, timezone
 from time import time
 from typing import Any, cast
 
@@ -38,7 +38,7 @@ class HealthService:
             HealthResponse: Health status and details for all components.
         """
         components = {}
-        details = {}
+        details: dict[str, Any] = {}
 
         # Check Milvus connection
         milvus_status, milvus_details = cls._check_milvus()
@@ -69,7 +69,7 @@ class HealthService:
             status=overall_status,
             service="Flouds Vector",
             version="1.0.0",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             uptime_seconds=uptime,
             components=components,
             details=details,
@@ -189,7 +189,7 @@ class HealthService:
         Returns:
             tuple[str, dict]: (status, details) for configuration validity.
         """
-        details = {}
+        details: dict[str, Any] = {}
         issues = []
 
         try:

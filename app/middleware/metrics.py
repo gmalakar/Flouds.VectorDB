@@ -24,7 +24,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
     Tracks request counts, processing times, and logs slow requests.
     """
 
-    def __init__(self, app: object, max_samples: int = 1000, max_endpoints: int = 100):
+    def __init__(self, app: Any, max_samples: int = 1000, max_endpoints: int = 100):
         """
         Initialize the MetricsMiddleware.
 

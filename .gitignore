@@ -47,6 +47,7 @@ dist/
 lib/
 scripts/
 tools/
+examples/
 
 # Testing
 .coverage
@@ -109,3 +110,4 @@ clean_proj.bat
 **/admin_credentials.txt
 **/admin_console.txt
 **/clients.db
+/.vs

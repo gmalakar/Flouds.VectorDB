@@ -27,7 +27,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     Tracks request counts and enforces limits per period.
     """
 
-    def __init__(self, app: object, calls: int = 100, period: int = 60):
+    def __init__(self, app: Any, calls: int = 100, period: int = 60):
         """
         Initialize the RateLimitMiddleware.
 
@@ -42,7 +42,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.clients: DefaultDict[str, List[float]] = defaultdict(list)
         self.tenants: DefaultDict[str, List[float]] = defaultdict(list)
 
-    async def dispatch(self, request: Request, call_next: "Callable[[Request], Any]") -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Any]) -> Response:
         """
         Intercept requests and enforce rate limits by tenant or IP.
 

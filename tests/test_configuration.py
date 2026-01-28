@@ -23,7 +23,7 @@ def mock_app_settings():
         mock_settings.server.port = 8080
         mock_settings.app.is_production = False
         mock_settings.app.debug = False
-        mock_settings.vectordb.endpoint = "localhost"
+        mock_settings.vectordb.container_name = "localhost"
         mock_settings.vectordb.port = 19530
         mock_settings.vectordb.username = "root"
         mock_settings.vectordb.password = "password"

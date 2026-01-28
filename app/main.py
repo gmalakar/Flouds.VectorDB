@@ -7,6 +7,7 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 
+import os
 import signal
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -14,7 +15,7 @@ from contextlib import asynccontextmanager
 from types import FrameType
 from typing import AsyncGenerator, Dict, List, Optional
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import Response
 from fastapi.security import HTTPBearer
 
@@ -23,10 +24,12 @@ from app.config.startup_validator import validate_startup_config
 from app.dependencies.auth import AuthMiddleware, common_headers
 from app.exceptions.custom_exceptions import MilvusConnectionError
 from app.logger import get_logger
+from app.middleware.docs_sanitizer import DocsSanitizerMiddleware
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.middleware.metrics import MetricsMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_logging import RequestLoggingMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.tenant_security import TenantCorsMiddleware, TenantTrustedHostMiddleware
 from app.middleware.validation import ValidationMiddleware
 from app.milvus.connection_pool import milvus_pool
@@ -38,7 +41,31 @@ from app.routers.metrics import router as metrics_router
 from app.routers.user import router as user_router
 from app.routers.vector import router as vector_router
 from app.tasks.cleanup import cleanup_connections
+from app.utils.docs import register_docs_routes
+from app.utils.enhance_openapi import setup_enhanced_openapi
 from app.utils.log_sanitizer import sanitize_for_log
+
+
+def _derive_server_url(request: Request) -> str:
+    """Derive the public server URL from request and common proxy headers.
+
+    Preference order:
+    - X-Forwarded-Proto for scheme
+    - X-Forwarded-Host or Host header for host (may include port)
+    - fallback to request.url.netloc
+    """
+    headers = request.headers
+    proto = headers.get("x-forwarded-proto")
+    if proto:
+        scheme = proto.split(",")[0].strip()
+    else:
+        scheme = request.url.scheme
+
+    host = headers.get("x-forwarded-host") or headers.get("host") or request.url.netloc
+    # Ensure no trailing slash
+    host = host.rstrip("/")
+    return f"{scheme}://{host}"
+
 
 logger = get_logger("main")
 
@@ -173,8 +200,18 @@ app = FastAPI(
     description="Multi-tenant vector database API with Milvus backend",
     version="1.0.0",
     openapi_url=f"{API_PREFIX}/openapi.json",
-    docs_url=f"{API_PREFIX}/docs",
-    redoc_url=f"{API_PREFIX}/redoc",
+    # Allow disabling interactive docs in production via env var.
+    # Set FLOUDS_DOCS_ENABLED=0 or false to hide `/api/v1/docs` and `/api/v1/redoc`.
+    docs_url=(
+        f"{API_PREFIX}/docs"
+        if os.getenv("FLOUDS_DOCS_ENABLED", "1").lower() not in ("0", "false", "no")
+        else None
+    ),
+    redoc_url=(
+        f"{API_PREFIX}/redoc"
+        if os.getenv("FLOUDS_DOCS_ENABLED", "1").lower() not in ("0", "false", "no")
+        else None
+    ),
     lifespan=lifespan,
     # Keep a non-blocking HTTPBearer at app-level so the OpenAPI "Authorize"
     # control is available, but don't add `common_headers` here because it
@@ -182,12 +219,23 @@ app = FastAPI(
     # like `/health`). Attach `common_headers` only to secured routers below.
     dependencies=[Depends(HTTPBearer(auto_error=False))],
 )
+# Use centralized enhanced OpenAPI generator so docs/metadata match
+# the Flouds project and include contact/license information.
+setup_enhanced_openapi(app)
+register_docs_routes(app, API_PREFIX)
 # Configure and add middleware
 # Use tenant-aware middleware for CORS and Trusted Host enforcement
 # Register CORS first so browser preflight and CORS headers are handled
 # before TrustedHost enforces server-side host restrictions. This ensures
 # browsers receive correct CORS responses while trusted-host remains a
 # server-side safety net.
+app.add_middleware(
+    SecurityHeadersMiddleware,
+    is_production=APP_SETTINGS.app.is_production,
+    security_config=APP_SETTINGS.security,
+)
+# Add docs sanitizer early so we can remove injected telemetry snippets
+app.add_middleware(DocsSanitizerMiddleware)
 app.add_middleware(TenantCorsMiddleware)
 app.add_middleware(TenantTrustedHostMiddleware)
 app.add_middleware(AuthMiddleware)

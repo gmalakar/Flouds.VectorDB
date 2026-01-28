@@ -10,6 +10,7 @@
 import logging
 import os
 import sys
+import time
 import traceback
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
@@ -69,6 +70,24 @@ def _get_or_create_logger(logger_name: str) -> logging.Logger:
     backup_count = int(os.getenv("FLOUDS_LOG_BACKUP_COUNT", "5"))
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
+
+    # Log retention: remove old log files matching the flouds-vectordb prefix
+    try:
+        retention_days = int(os.getenv("FLOUDS_LOG_RETENTION_DAYS", "14"))
+        if retention_days > 0:
+            cutoff = time.time() - (retention_days * 86400)
+            for fname in os.listdir(log_dir):
+                if not fname.startswith("flouds-vectordb-") or not fname.endswith(".log"):
+                    continue
+                fpath = os.path.join(log_dir, fname)
+                try:
+                    if os.path.getmtime(fpath) < cutoff:
+                        os.remove(fpath)
+                        print(f"Info: removed old log file: {fpath}")
+                except Exception as e:
+                    print(f"Warning: failed to remove old log file {fpath}: {e}")
+    except Exception as e:
+        print(f"Warning: error during log retention cleanup: {e}")
 
     log_path = os.path.join(log_dir, log_file)
 

@@ -60,9 +60,15 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     FLOUDS_API_ENV=Production \
     APP_DEBUG_MODE=0 \
+    FLOUDS_OPENAPI_URL= \
     FLOUDS_LOG_PATH=/flouds-vector/logs \
     FLOUDS_CLIENTS_DB=/flouds-vector/data/clients.db \
     FLOUDS_APP_SECRETS=/flouds-vector/data/secrets \
+    # CSP env overrides (can be JSON array or comma-separated string)
+        # CSP is configured in app/config/appsettings.json; keep Dockerfile minimal
+    # Docs assets configuration
+    FLOUDS_DOCS_ASSET_BASE= \
+    FLOUDS_DOCS_USE_PROXY=0 \
     PATH=/opt/venv/bin:$PATH
 
 # Install runtime dependencies only (ca-certificates for HTTPS)

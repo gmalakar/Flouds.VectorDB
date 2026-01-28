@@ -4,6 +4,7 @@
 # Copyright (c) 2024 Goutam Malakar. All rights reserved.
 # =============================================================================
 import os
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -36,8 +37,17 @@ class ServerConfig(BaseModel):
     Server configuration settings.
     """
 
-    host: str = Field(default="127.0.0.1")
-    port: int = Field(default=5001)
+    host: str = Field(default="localhost")
+    openapi_url: str = Field(default="http://localhost:19680")
+    port: int = Field(default=19680)
+    docs_asset_base: Optional[str] = Field(
+        default=None,
+        description="Base URL to load documentation assets from (can be CDN or private host).",
+    )
+    docs_use_proxy: bool = Field(
+        default=False,
+        description="If true, application will proxy docs assets under /_docs_assets/ to keep them same-origin.",
+    )
 
     @field_validator("host")
     @classmethod
@@ -173,6 +183,36 @@ class SecurityConfig(BaseModel):
     trusted_hosts: list[str] = Field(
         default_factory=lambda: ["*"],
         description="List of trusted hostnames for TrustedHostMiddleware. Use '*' to allow all.",
+    )
+
+    # Content Security Policy configuration
+    # Default to None so values are populated from appsettings.json via ConfigLoader
+    csp_script_src: Optional[List[str]] = Field(
+        default=None,
+        description="CSP script-src directive values (populated from appsettings.json)",
+    )
+    csp_style_src: Optional[List[str]] = Field(
+        default=None,
+        description="CSP style-src directive values (populated from appsettings.json)",
+    )
+    csp_img_src: Optional[List[str]] = Field(
+        default=None,
+        description="CSP img-src directive values (populated from appsettings.json)",
+    )
+    csp_connect_src: Optional[List[str]] = Field(
+        default=None,
+        description="CSP connect-src directive values (populated from appsettings.json)",
+    )
+    csp_font_src: Optional[List[str]] = Field(
+        default=None,
+        description="CSP font-src directive values (populated from appsettings.json)",
+    )
+    csp_worker_src: Optional[List[str]] = Field(
+        default=None,
+        description="CSP worker-src directive values (populated from appsettings.json)",
+    )
+    enable_hsts: bool = Field(
+        default=True, description="Enable HTTP Strict Transport Security in production"
     )
 
     @field_validator("cors_origins", "trusted_hosts")

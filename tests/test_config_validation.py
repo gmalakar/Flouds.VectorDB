@@ -40,7 +40,7 @@ class TestConfigValidation:
     @patch("app.config.validation.APP_SETTINGS")
     @patch("app.config.validation.os.getenv")
     def test_validate_vectordb_config_valid(self, mock_getenv, mock_settings):
-        mock_settings.vectordb.endpoint = "localhost"
+        mock_settings.vectordb.container_name = "localhost"
         mock_settings.vectordb.port = 19530
         mock_settings.vectordb.username = "root"
         mock_settings.vectordb.password = "password"
@@ -54,7 +54,7 @@ class TestConfigValidation:
     @patch("app.config.validation.APP_SETTINGS")
     @patch("app.config.validation.os.getenv")
     def test_validate_vectordb_config_missing_credentials(self, mock_getenv, mock_settings):
-        mock_settings.vectordb.endpoint = "localhost"
+        mock_settings.vectordb.container_name = "localhost"
         mock_settings.vectordb.port = 19530
         mock_settings.vectordb.username = ""  # Missing username
         mock_settings.vectordb.password = ""

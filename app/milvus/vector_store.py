@@ -76,7 +76,6 @@ class VectorStore(BaseMilvus):
         user_id: str,
         password: str,
         model_name: str,
-        vector_dimension: int = 0,
     ):
         """
         Initialize a thread-safe VectorStore for a tenant.
@@ -108,19 +107,20 @@ class VectorStore(BaseMilvus):
         self._password: str = password
         self._model_name: str = model_name
         self._tenant_role_name: str = BaseMilvus._get_tenant_role_name_by_tenant_code(tenant_code)
-        self._vector_dimension: int = (
-            vector_dimension
-            if vector_dimension > 0
-            else getattr(APP_SETTINGS.vectordb, "default_dimension", 768)
-        )
-        logger.debug(
-            f"Using vector dimension: {self._vector_dimension} for tenant '{tenant_code}' and model '{model_name}'"
-        )
         self._db_name: str = BaseMilvus._get_db_name_by_tenant_code(tenant_code)
         self._store_name: str = BaseMilvus._get_vector_store_name_by_tenant_code_modelname(
             self._tenant_code, self._model_name
         )
         self._tenant_client: Optional[MilvusClient] = None
+        vector_dimension = self._get_vector_dimension()
+        self._vector_dimension: int = (
+            vector_dimension
+            if vector_dimension > 0
+            else getattr(APP_SETTINGS.vectordb, "default_dimension", 348)
+        )
+        logger.debug(
+            f"Using vector dimension: {self._vector_dimension} for tenant '{tenant_code}' and model '{model_name}'"
+        )
         self._lock: Lock = Lock()
 
     @staticmethod
@@ -204,6 +204,64 @@ class VectorStore(BaseMilvus):
             )
         client.load_collection(self._store_name)
 
+    def _get_vector_dimension(self) -> int:
+        """
+        Returns the dimension of a vector field in a Milvus collection.
+        Raises ValueError if the field is not found or is not a vector field.
+        """
+        client = BaseMilvus._get_tenant_client(self._user_id, self._password, self._db_name)
+        info = client.describe_collection(self._store_name)
+        vector_field_name = BaseMilvus._get_vector_field_name()
+
+        # Normalize to a list of field-like objects/dicts regardless of pymilvus version
+        schema = None
+        if isinstance(info, dict):
+            schema = info.get("schema") or info
+        else:
+            schema = getattr(info, "schema", None) or info
+
+        fields = None
+        if isinstance(schema, dict):
+            fields = schema.get("fields")
+        else:
+            fields = getattr(schema, "fields", None)
+
+        if not fields:
+            raise ValueError(f"No schema fields found for collection '{self._store_name}'.")
+
+        for field in fields:
+            # Support both dict-style and object-style field representations
+            name = field.get("name") if isinstance(field, dict) else getattr(field, "name", None)
+            if name != vector_field_name:
+                continue
+
+            # Try different places where dim may be stored depending on pymilvus/model version
+            dim = None
+            if isinstance(field, dict):
+                params = field.get("params") or field.get("type_params") or {}
+                dim = params.get("dim") if isinstance(params, dict) else None
+            else:
+                params = getattr(field, "params", None) or getattr(field, "type_params", None)
+                if isinstance(params, dict):
+                    dim = params.get("dim")
+
+            if dim is None:
+                raise ValueError(
+                    f"Field '{vector_field_name}' in collection '{self._store_name}' has no 'dim' parameter or is not a vector field."
+                )
+
+            try:
+                logger.debug(f"Vector dimension for collection '{self._store_name}': {dim}")
+                return int(dim)
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"Invalid 'dim' value for field '{vector_field_name}' in collection '{self._store_name}': {dim}"
+                )
+
+        raise ValueError(
+            f"Field '{vector_field_name}' not found in collection '{self._store_name}'."
+        )
+
     @staticmethod
     def __convert_to_field_data(embedded_vectors: List[EmbeddedVector]) -> List[dict]:
         """
@@ -266,6 +324,33 @@ class VectorStore(BaseMilvus):
                 logger.debug(f"Using tenant client for collection '{self._store_name}'")
 
             t1 = time.perf_counter()
+
+            # Validate vector dimensions before attempting upsert. Milvus requires
+            # that each dense vector length equals the collection `dim` configured
+            # when the collection was created. Catch mismatches early and raise a
+            # descriptive error to help operator diagnosis.
+            for ev in embedded_vectors:
+                try:
+                    vlen = len(ev.vector)
+                except Exception:
+                    logger.error(
+                        "Invalid vector for key %s: not a sequence", sanitize_for_log(ev.key)
+                    )
+                    raise VectorStoreError(
+                        f"Invalid vector for key {ev.key}: expected a sequence of floats"
+                    )
+                if vlen != self._vector_dimension:
+                    logger.error(
+                        "Vector dimension mismatch for key %s: got %d, expected %d",
+                        sanitize_for_log(ev.key),
+                        vlen,
+                        self._vector_dimension,
+                    )
+                    raise VectorStoreError(
+                        f"Vector dimension mismatch for key {ev.key}: got {vlen}, expected {self._vector_dimension}. "
+                        "Ensure the collection was created with the correct `dimension` or supply vectors with the configured dimension."
+                    )
+
             data_to_upsert = self.__convert_to_field_data(embedded_vectors)
             t2 = time.perf_counter()
 
@@ -310,6 +395,10 @@ class VectorStore(BaseMilvus):
         except (ConnectionError, TimeoutError) as ex:
             logger.exception(f"Connection error upserting data into collection: {ex}")
             raise VectorStoreError("Connection error upserting data into collection") from ex
+        except VectorStoreError:
+            # Preserve user-raised VectorStoreError messages (e.g., validation errors)
+            logger.debug("Re-raising VectorStoreError without masking the original message")
+            raise
         except Exception as ex:
             logger.exception(f"Unexpected error upserting data into Milvus collection: {ex}")
             raise VectorStoreError("Error upserting data into Milvus collection") from ex

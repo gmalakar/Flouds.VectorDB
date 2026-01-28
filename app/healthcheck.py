@@ -9,8 +9,8 @@
 #
 # Environment Variables:
 #   HEALTHCHECK_URL      : Complete URL override (e.g., http://localhost:19680/health)
-#   HEALTHCHECK_HOST     : Host for healthcheck (default: SERVER_HOST or "localhost")
-#   HEALTHCHECK_PORT     : Port for healthcheck (default: SERVER_PORT or "19680")
+#   HEALTHCHECK_HOST     : Host for healthcheck (default: FLOUDS_HOST or "localhost")
+#   HEALTHCHECK_PORT     : Port for healthcheck (default: FLOUDS_PORT or "19680")
 #   HEALTHCHECK_PATH     : Path for healthcheck (default: "/health")
 #   HEALTHCHECK_TIMEOUT  : Request timeout in seconds (default: "8")
 # =============================================================================
@@ -30,7 +30,7 @@ def build_healthcheck_url() -> str:
     Priority:
     1. HEALTHCHECK_URL (complete override)
     2. Compose from HEALTHCHECK_HOST/PORT/PATH
-    3. Fall back to SERVER_HOST/PORT defaults
+    3. Fall back to FLOUDS_HOST/PORT defaults
 
     Returns:
         str: Complete healthcheck URL
@@ -41,8 +41,8 @@ def build_healthcheck_url() -> str:
         return explicit
 
     # Compose from host/port/path envs to avoid hardcoding
-    host = os.getenv("HEALTHCHECK_HOST", os.getenv("SERVER_HOST", "localhost"))
-    port = os.getenv("HEALTHCHECK_PORT", os.getenv("SERVER_PORT", "19680"))
+    host = os.getenv("HEALTHCHECK_HOST", os.getenv("FLOUDS_HOST", "localhost"))
+    port = os.getenv("HEALTHCHECK_PORT", os.getenv("FLOUDS_PORT", "19680"))
     path = os.getenv("HEALTHCHECK_PATH", "/api/v1/health")
 
     # Normalize path
@@ -65,7 +65,7 @@ def main() -> int:
     # Basic safety: only allow http(s) schemes and restrict hosts to localhost by default
     parsed = urlparse(url)
     allowed_schemes = {"http", "https"}
-    server_host = os.getenv("SERVER_HOST", "localhost")
+    server_host = os.getenv("FLOUDS_HOST", "localhost")
     allowed_hosts = {"localhost", "127.0.0.1", "::1", server_host}
 
     if parsed.scheme not in allowed_schemes:

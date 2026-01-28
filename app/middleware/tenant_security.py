@@ -169,6 +169,23 @@ def _is_allowed(value: Optional[str], allowed_list: List[str]) -> bool:
     return SecurityPatternMatcher.is_allowed(value, allowed_list)
 
 
+# Backwards-compatible function aliases for older imports/tests
+def _extract_token(request: Request) -> Optional[str]:
+    return SecurityPatternMatcher.extract_token(request)
+
+
+def _match_pattern(value: Optional[str], pattern: Optional[str]) -> bool:
+    return SecurityPatternMatcher.match_pattern(value, pattern)
+
+
+def _cors_preflight(origin_value: Optional[str]) -> Response:
+    return SecurityPatternMatcher.cors_preflight(origin_value)
+
+
+def _apply_cors_headers(response: Response, origin_value: Optional[str]) -> None:
+    return SecurityPatternMatcher.apply_cors_headers(response, origin_value)
+
+
 class TenantTrustedHostMiddleware(BaseHTTPMiddleware):
     """Validate the Host header against tenant-specific trusted hosts.
 
